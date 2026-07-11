@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interviewagent.mapper.RefreshTokenMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.interviewagent.entity.RefreshToken">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="device_id" property="deviceId"/>
+        <result column="jti" property="jti"/>
+        <result column="parent_jti" property="parentJti"/>
+        <result column="expires_at" property="expiresAt"/>
+        <result column="revoked_at" property="revokedAt"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <!-- 插入新 RT；created_at 由数据库默认值填充，revoked_at 默认为 NULL -->
+    <insert id="insert" parameterType="com.example.interviewagent.entity.RefreshToken"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO refresh_tokens (user_id, device_id, jti, parent_jti, expires_at)
+        VALUES (#{userId}, #{deviceId}, #{jti}, #{parentJti}, #{expiresAt})
+    </insert>
+
+    <select id="selectByJti" resultMap="BaseResultMap">
+        SELECT id, user_id, device_id, jti, parent_jti, expires_at, revoked_at, created_at
+        FROM refresh_tokens
+        WHERE jti = #{jti}
+    </select>
+
+    <!-- 统计以该 jti 为父的后继 RT 数量：>0 说明它曾被正常轮换过 -->
+    <select id="countChildren" resultType="int">
+        SELECT COUNT(*)
+        FROM refresh_tokens
+        WHERE parent_jti = #{jti}
+    </select>
+
+    <!-- 仅当尚未失效时才更新，保证幂等且不覆盖原始失效时间 -->
+    <update id="revokeByJti">
+        UPDATE refresh_tokens
+        SET revoked_at = #{revokedAt}
+        WHERE jti = #{jti}
+          AND revoked_at IS NULL
+    </update>
+
+    <!-- 批量吊销某用户所有仍有效的 RT（管理员踢人 / 全端登出） -->
+    <update id="revokeAllByUserId">
+        UPDATE refresh_tokens
+        SET revoked_at = #{revokedAt}
+        WHERE user_id = #{userId}
+          AND revoked_at IS NULL
+    </update>
+
+    <!-- 登录挤旧：吊销某用户在指定设备上仍有效的 RT，实现同设备单活跃会话 -->
+    <update id="revokeActiveByUserAndDevice">
+        UPDATE refresh_tokens
+        SET revoked_at = #{revokedAt}
+        WHERE user_id = #{userId}
+          AND device_id = #{deviceId}
+          AND revoked_at IS NULL
+    </update>
+
+</mapper>

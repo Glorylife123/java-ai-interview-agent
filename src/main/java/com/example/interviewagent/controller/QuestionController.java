@@ -2,7 +2,8 @@ package com.example.interviewagent.controller;
 
 import com.example.interviewagent.common.PageResult;
 import com.example.interviewagent.common.Result;
-import com.example.interviewagent.entity.Question;
+import com.example.interviewagent.controller.dto.QuestionResponse;
+import com.example.interviewagent.controller.dto.QuestionUpsertRequest;
 import com.example.interviewagent.entity.Tag;
 import com.example.interviewagent.service.QuestionService;
 import lombok.RequiredArgsConstructor;
@@ -26,27 +27,28 @@ public class QuestionController {
     private final QuestionService questionService;
 
     @PostMapping
-    public Result<Question> create(@RequestBody Question question) {
-        return Result.success(questionService.create(question));
+    public Result<QuestionResponse> create(@RequestBody QuestionUpsertRequest request) {
+        return Result.success(questionService.create(request));
     }
 
     @GetMapping("/{id}")
-    public Result<Question> getById(@PathVariable Long id) {
+    public Result<QuestionResponse> getById(@PathVariable Long id) {
         return Result.success(questionService.viewDetail(id));
     }
 
     @GetMapping
-    public Result<PageResult<Question>> page(@RequestParam(required = false) String keyword,
-                                             @RequestParam(required = false) Integer difficulty,
-                                             @RequestParam(required = false) Long tagId,
-                                             @RequestParam(required = false) Integer pageNum,
-                                             @RequestParam(required = false) Integer pageSize) {
-        return Result.success(questionService.page(keyword, difficulty, tagId, pageNum, pageSize));
+    public Result<PageResult<QuestionResponse>> page(@RequestParam(required = false) String keyword,
+                                                     @RequestParam(required = false) Integer difficulty,
+                                                     @RequestParam(required = false) String questionType,
+                                                     @RequestParam(required = false) Long tagId,
+                                                     @RequestParam(required = false) Integer pageNum,
+                                                     @RequestParam(required = false) Integer pageSize) {
+        return Result.success(questionService.page(keyword, difficulty, questionType, tagId, pageNum, pageSize));
     }
 
     @PutMapping("/{id}")
-    public Result<Question> update(@PathVariable Long id, @RequestBody Question question) {
-        return Result.success(questionService.update(id, question));
+    public Result<QuestionResponse> update(@PathVariable Long id, @RequestBody QuestionUpsertRequest request) {
+        return Result.success(questionService.update(id, request));
     }
 
     @DeleteMapping("/{id}")

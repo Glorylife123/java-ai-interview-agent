@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interviewagent.mapper.QuestionMapper">
+
+
+    <select id="selectById" resultType="com.example.interviewagent.entity.Question">
+        SELECT *
+        FROM question
+        WHERE id = #{id}
+          AND deleted = 0
+    </select>
+
+    <select id="selectPage" resultType="com.example.interviewagent.entity.Question">
+        SELECT DISTINCT q.*
+        FROM question q
+        <if test="tagId != null">
+            INNER JOIN question_tag qt ON q.id = qt.question_id
+        </if>
+        WHERE q.deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (q.title LIKE CONCAT('%', #{keyword}, '%') OR q.content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="difficulty != null">
+            AND q.difficulty = #{difficulty}
+        </if>
+        <if test="questionTypeValues != null and !questionTypeValues.isEmpty()">
+            AND TRIM(q.question_type) IN
+            <foreach collection="questionTypeValues" item="questionTypeValue" open="(" separator="," close=")">
+                #{questionTypeValue}
+            </foreach>
+        </if>
+        <if test="tagId != null">
+            AND qt.tag_id = #{tagId}
+        </if>
+        ORDER BY q.id ASC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(DISTINCT q.id)
+        FROM question q
+        <if test="tagId != null">
+            INNER JOIN question_tag qt ON q.id = qt.question_id
+        </if>
+        WHERE q.deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (q.title LIKE CONCAT('%', #{keyword}, '%') OR q.content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="difficulty != null">
+            AND q.difficulty = #{difficulty}
+        </if>
+        <if test="questionTypeValues != null and !questionTypeValues.isEmpty()">
+            AND TRIM(q.question_type) IN
+            <foreach collection="questionTypeValues" item="questionTypeValue" open="(" separator="," close=")">
+                #{questionTypeValue}
+            </foreach>
+        </if>
+        <if test="tagId != null">
+            AND qt.tag_id = #{tagId}
+        </if>
+    </select>
+
+    <insert id="insert" parameterType="com.example.interviewagent.entity.Question"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO question (
+            title, content, question_type, difficulty, answer, answer_analysis,
+            source, view_count, submit_count, correct_count, status, created_by
+        )
+        VALUES (
+            #{title}, #{content}, #{questionType}, #{difficulty}, #{answer}, #{answerAnalysis},
+            #{source}, #{viewCount}, #{submitCount}, #{correctCount}, #{status}, #{createdBy}
+        )
+    </insert>
+
+    <update id="updateById" parameterType="com.example.interviewagent.entity.Question">
+        UPDATE question
+        <set>
+            <if test="title != null">title = #{title},</if>
+            <if test="content != null">content = #{content},</if>
+            <if test="questionType != null">question_type = #{questionType},</if>
+            <if test="difficulty != null">difficulty = #{difficulty},</if>
+            <if test="answer != null">answer = #{answer},</if>
+            <if test="answerAnalysis != null">answer_analysis = #{answerAnalysis},</if>
+            <if test="source != null">source = #{source},</if>
+            <if test="status != null">status = #{status},</if>
+        </set>
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <update id="logicDeleteById">
+        UPDATE question
+        SET deleted = 1
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <update id="increaseViewCount">
+        UPDATE question
+        SET view_count = view_count + 1
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <update id="increaseSubmitCount">
+        UPDATE question
+        SET submit_count = submit_count + 1,
+            correct_count = correct_count + CASE WHEN #{isCorrect} = 1 THEN 1 ELSE 0 END
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+</mapper>

@@ -6,3 +6,20 @@ spring:
 
 server:
   port: 8080
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+
+# 双令牌（JWT）相关配置
+app:
+  jwt:
+    # HS256 密钥，长度必须 >= 32 字节（256 位）。
+    # 优先读环境变量 APP_JWT_SECRET；冒号后为本地开发回退值（仅供 dev，切勿用于生产）。
+    # 生产 profile 在 application-prod.yml 中不设回退值，未注入环境变量将启动失败（fail-closed）。
+    secret: ${APP_JWT_SECRET:LocalTestJwtSecretKeyMustBeMoreThan32Bytes!@#}
+    access-token-minutes: 15   # Access Token 有效期（分钟）
+    refresh-token-days: 7      # Refresh Token 有效期（天）
+    grace-seconds: 30          # 刷新宽限期（秒）：仅对「被轮换取代」的 RT 生效，用于容忍网络重传
+    cookie-name: refresh_token # 下发 RT 的 Cookie 名称
+    cookie-secure: true        # Cookie 是否带 Secure 属性（仅 HTTPS 下发），dev 环境会覆盖为 false
+    cookie-same-site: Strict   # Cookie 的 SameSite 属性
