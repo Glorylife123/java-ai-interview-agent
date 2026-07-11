@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interviewagent.mapper.UserMapper">
+
+    <select id="selectById" resultType="com.example.interviewagent.entity.User">
+        SELECT *
+        FROM `user`
+        WHERE id = #{id}
+          AND deleted = 0
+    </select>
+
+    <select id="selectByUsername" resultType="com.example.interviewagent.entity.User">
+        SELECT *
+        FROM `user`
+        WHERE username = #{username}
+          AND deleted = 0
+    </select>
+
+    <select id="selectPage" resultType="com.example.interviewagent.entity.User">
+        SELECT *
+        FROM `user`
+        WHERE deleted = 0
+        ORDER BY created_at DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countAll" resultType="long">
+        SELECT COUNT(*)
+        FROM `user`
+        WHERE deleted = 0
+    </select>
+
+    <insert id="insert" parameterType="com.example.interviewagent.entity.User"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO `user` (username, password_hash, nickname, avatar_url, role, status)
+        VALUES (#{username}, #{passwordHash}, #{nickname}, #{avatarUrl}, #{role}, #{status})
+    </insert>
+
+    <update id="updateById" parameterType="com.example.interviewagent.entity.User">
+        UPDATE `user`
+        <set>
+            <if test="nickname != null">nickname = #{nickname},</if>
+            <if test="avatarUrl != null">avatar_url = #{avatarUrl},</if>
+            <if test="role != null">role = #{role},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="passwordHash != null">password_hash = #{passwordHash},</if>
+        </set>
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <update id="logicDeleteById">
+        UPDATE `user`
+        SET deleted = 1
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+</mapper>

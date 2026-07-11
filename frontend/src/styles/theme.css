@@ -1,0 +1,215 @@
+/*
+ * 全局设计系统（Apple 风格）
+ * 只做视觉：设计变量 + Element Plus CSS 变量覆盖 + 组件级精修。
+ * 不改任何交互逻辑；须在 element-plus/dist/index.css 之后引入。
+ *
+ * 设计取向：大留白、极细分隔线、柔和层次、大圆角、克制的青绿点缀。
+ */
+
+:root {
+  /* ---- 品牌点缀色（青绿）---- */
+  --brand-500: #0d9488;
+  --brand-600: #0f766e;
+  --brand-400: #14b8a6;
+  --brand-gradient: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+
+  /* ---- 表面 / 背景（Apple 招牌浅灰）---- */
+  --app-bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-sunken: #f5f5f7;
+  --hairline: #e8e8ed;
+
+  /* ---- 文字 ---- */
+  --ink-900: #1d1d1f;
+  --ink-600: #4b5563;
+  --ink-400: #86868b;
+
+  /* ---- 圆角 ---- */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+
+  /* ---- 层次阴影（很淡，两层叠加）---- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 1px rgba(0, 0, 0, 0.03);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.06);
+  --shadow-accent: 0 6px 16px rgba(13, 148, 136, 0.24);
+
+  /* ========== Element Plus 全局变量覆盖 ========== */
+  --el-color-primary: #0d9488;
+  --el-color-primary-light-3: #3aa89e;
+  --el-color-primary-light-5: #6cbfb7;
+  --el-color-primary-light-7: #9fd6d0;
+  --el-color-primary-light-8: #b9e2de;
+  --el-color-primary-light-9: #e6f5f3;
+  --el-color-primary-dark-2: #0b7a70;
+
+  --el-text-color-primary: #1d1d1f;
+  --el-text-color-regular: #4b5563;
+  --el-text-color-secondary: #86868b;
+
+  --el-border-color: #e8e8ed;
+  --el-border-color-light: #eef0f2;
+  --el-border-color-lighter: #f2f3f5;
+  --el-fill-color-blank: #ffffff;
+
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 8px;
+  --el-border-radius-round: 980px;
+
+  --el-font-size-base: 14px;
+
+  /* 表格：更轻的分隔线、柔和表头、清爽悬停 */
+  --el-table-border-color: #f0f0f3;
+  --el-table-header-bg-color: #fbfbfd;
+  --el-table-header-text-color: #6e6e73;
+  --el-table-row-hover-bg-color: #f5faf9;
+
+  /* 菜单 */
+  --el-menu-bg-color: transparent;
+  --el-menu-hover-bg-color: transparent;
+}
+
+/* ---- 基础排版 / 背景 ---- */
+html,
+body {
+  margin: 0;
+  background: var(--app-bg);
+  color: var(--ink-900);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: 0.01em;
+}
+h1, h2, h3, h4 {
+  letter-spacing: -0.02em;
+  color: var(--ink-900);
+}
+
+/* ---- 自定义滚动条（细、圆、低调）---- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #d2d2d7; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #b8b8c0; background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ========== 卡片 ========== */
+.el-card {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+  overflow: hidden;
+}
+.el-card.is-hover-shadow:hover,
+.el-card:hover {
+  box-shadow: var(--shadow-2);
+}
+.el-card__header {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--hairline);
+  font-weight: 600;
+  font-size: 15px;
+}
+.el-card__body { padding: 22px; }
+
+/* ========== 按钮 ========== */
+.el-button {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.el-button:active { transform: scale(0.97); }
+/* 主按钮：实心青绿 + 柔和高光 */
+.el-button--primary:not(.is-link):not(.is-text):not(.is-plain) {
+  background: var(--brand-500);
+  border-color: var(--brand-500);
+  box-shadow: var(--shadow-accent);
+}
+.el-button--primary:not(.is-link):not(.is-text):not(.is-plain):hover {
+  background: var(--brand-400);
+  border-color: var(--brand-400);
+  transform: translateY(-1px);
+}
+/* 默认按钮：Apple 浅灰胶囊感 */
+.el-button--default:not(.is-link):not(.is-text) {
+  background: #f5f5f7;
+  border-color: #e6e6eb;
+  color: var(--ink-900);
+}
+.el-button--default:not(.is-link):not(.is-text):hover {
+  background: #ececf0;
+  border-color: #dcdce2;
+  color: var(--ink-900);
+}
+.el-button.is-link { font-weight: 500; }
+
+/* ========== 输入框 / 下拉 / 文本域 ========== */
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  border-radius: var(--radius-sm);
+  background-color: #fff;
+  transition: box-shadow 0.2s ease;
+}
+.el-input__wrapper:hover,
+.el-select__wrapper:hover { box-shadow: 0 0 0 1px #d0d0d6 inset; }
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-5) inset !important;
+}
+
+/* ========== 表格：干净、通透、行距舒展 ========== */
+.el-table { font-size: 14px; }
+.el-table th.el-table__cell {
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 0.03em;
+  text-transform: none;
+}
+.el-table .el-table__cell { padding: 13px 0; }
+.el-table--border,
+.el-table--border .el-table__cell { border-color: var(--el-table-border-color); }
+.el-table__row { transition: background 0.15s ease; }
+
+/* ========== 标签 ========== */
+.el-tag {
+  border-radius: 7px;
+  border: none;
+  font-weight: 500;
+}
+
+/* ========== 对话框：大圆角 + 柔和层次 ========== */
+.el-dialog {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.el-dialog__header {
+  padding: 20px 24px;
+  margin: 0;
+  border-bottom: 1px solid var(--hairline);
+  font-weight: 600;
+}
+.el-dialog__body { padding: 22px 24px; }
+.el-dialog__footer { padding: 16px 24px 20px; border-top: 1px solid var(--hairline); }
+
+/* ========== 描述列表 / 提示 / 分页 ========== */
+.el-descriptions { border-radius: var(--radius-sm); }
+.el-descriptions__body { background: transparent; }
+.el-alert { border-radius: var(--radius-sm); }
+.el-pagination.is-background .el-pager li {
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--hairline);
+}
+.el-pagination.is-background .el-pager li.is-active {
+  background: var(--brand-500);
+  border-color: var(--brand-500);
+}
+
+/* ========== 表单标签 ========== */
+.el-form-item__label { color: var(--ink-600); font-weight: 500; }
+
+/* 内容区各卡片之间统一留白 */
+.el-main > section > .el-card + .el-card,
+.el-main > section > .el-row + .el-card { margin-top: 20px; }

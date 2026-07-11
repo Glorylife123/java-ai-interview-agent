@@ -2,9 +2,16 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/interview_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: ${MYSQL_USERNAME:root}
-    password: ${MYSQL_PASSWORD:}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 
 mybatis:
   configuration:
     map-underscore-to-camel-case: true
+
+# 生产环境：密钥/口令一律来自环境变量，不提供任何回退默认值。
+# 未注入 APP_JWT_SECRET / DB_PASSWORD 时应用启动失败，避免误用开发密钥（fail-closed）。
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET}
+    cookie-secure: true   # 生产必须走 HTTPS，Secure Cookie 保持开启

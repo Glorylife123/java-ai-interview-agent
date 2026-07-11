@@ -1,28 +1,25 @@
 package com.example.interviewagent.mapper;
 
 import com.example.interviewagent.entity.Tag;
-import org.apache.ibatis.annotations.Insert;
+import com.example.interviewagent.service.dto.QuestionTagRelation;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
 
 @Mapper
 public interface QuestionTagMapper {
 
-    @Insert("""
-            INSERT IGNORE INTO question_tag (question_id, tag_id)
-            VALUES (#{questionId}, #{tagId})
-            """)
     int insertIgnore(@Param("questionId") Long questionId, @Param("tagId") Long tagId);
 
-    @Select("""
-            SELECT t.*
-            FROM tag t
-            INNER JOIN question_tag qt ON t.id = qt.tag_id
-            WHERE qt.question_id = #{questionId} AND t.deleted = 0
-            ORDER BY t.category, t.name
-            """)
-    List<Tag> selectTagsByQuestionId(Long questionId);
+    List<Tag> selectTagsByQuestionId(@Param("questionId") Long questionId);
+
+    /** 按当前页题目批量读取标签，避免列表展示产生 N+1 查询。 */
+    List<QuestionTagRelation> selectRelationsByQuestionIds(@Param("questionIds") List<Long> questionIds);
+
+    /** 删除一题当前所有关联，用于完整替换标签集合。 */
+    int deleteByQuestionId(@Param("questionId") Long questionId);
+
+    /** 批量插入经过校验、去重后的标签关联。 */
+    int insertBatch(@Param("questionId") Long questionId, @Param("tagIds") List<Long> tagIds);
 }
