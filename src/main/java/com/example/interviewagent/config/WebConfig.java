@@ -25,7 +25,15 @@ public class WebConfig implements WebMvcConfigurer {
             "/api/auth/login",
             "/api/auth/register",
             "/api/auth/refresh",
-            "/api/auth/logout"
+            "/api/auth/logout",
+            // OpenAPI / Swagger UI 文档与接口定义 JSON：完全公开，便于在线查看与调试
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html",
+            // Knife4j 国产文档 UI：入口 /doc.html 及其静态资源（webjars）
+            "/doc.html",
+            "/webjars/**",
+            "/favicon.ico",
     };
 
     private final JwtAuthInterceptor jwtAuthInterceptor;

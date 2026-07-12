@@ -1,39 +1,70 @@
 package com.example.interviewagent.controller;
 
+import com.example.interviewagent.common.PageResult;
 import com.example.interviewagent.common.Result;
+import com.example.interviewagent.controller.dto.QuestionResponse;
+import com.example.interviewagent.dto.WrongQuestionQueryDTO;
 import com.example.interviewagent.entity.WrongQuestion;
 import com.example.interviewagent.service.WrongQuestionService;
+import com.example.interviewagent.vo.WrongQuestionVO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
+/**
+ * 错题本接口。
+ * <ul>
+ *   <li>/api/wrong/** 为新增 RESTful 接口，使用 @RequestAttribute("authUserId") 获取当前用户；</li>
+ *   <li>/api/wrong-questions/** 为旧版兼容接口（含 create/listByUserId/markMastered），
+ *       旧路径保留以防他处引用，不主动删除。使用方应逐步迁移至 /api/wrong。</li>
+ * </ul>
+ */
 @RestController
-@RequestMapping("/api/wrong-questions")
+@RequestMapping("/api/wrong")
 @RequiredArgsConstructor
 public class WrongQuestionController {
 
     private final WrongQuestionService wrongQuestionService;
 
-    @PostMapping
-    public Result<WrongQuestion> create(@RequestBody WrongQuestion wrongQuestion) {
-        return Result.success(wrongQuestionService.create(wrongQuestion));
+    /** 分页查询错题列表，带回题目信息。 */
+    @GetMapping("/page")
+    public Result<PageResult<WrongQuestionVO>> page(WrongQuestionQueryDTO query,
+                                                     @RequestAttribute("authUserId") Long userId) {
+        return Result.success(wrongQuestionService.pageWrongQuestions(userId, query));
     }
 
-    @GetMapping("/users/{userId}")
-    public Result<List<WrongQuestion>> listByUserId(@PathVariable Long userId) {
-        return Result.success(wrongQuestionService.listByUserId(userId));
-    }
-
-    @PutMapping("/{id}/mastered")
-    public Result<Void> markMastered(@PathVariable Long id) {
-        wrongQuestionService.markMastered(id);
+    /** 移除错题（物理删除）。 */
+    @DeleteMapping("/{questionId}")
+    public Result<Void> remove(@PathVariable Long questionId,
+                               @RequestAttribute("authUserId") Long userId) {
+        wrongQuestionService.removeWrongQuestion(userId, questionId);
         return Result.success();
+    }
+
+    /** 标记已掌握 / 取消掌握。请求体示例：{"mastered": true}。 */
+    @PutMapping("/{questionId}/mastered")
+    public Result<Void> mastered(@PathVariable Long questionId,
+                                 @RequestBody(required = false) Map<String, Boolean> body,
+                                 @RequestAttribute("authUserId") Long userId) {
+        Boolean mastered = body != null ? body.get("mastered") : null;
+        wrongQuestionService.markMastered(userId, questionId, mastered);
+        return Result.success();
+    }
+
+    /** 随机获取一道错题的完整详情（含标签），无错题时返回 data = null。 */
+    @GetMapping("/random")
+    public Result<QuestionResponse> random(@RequestAttribute("authUserId") Long userId) {
+        QuestionResponse detail = wrongQuestionService.getRandomWrongQuestionDetail(userId);
+        return Result.success(detail);
     }
 }

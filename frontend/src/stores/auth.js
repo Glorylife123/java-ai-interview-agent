@@ -68,7 +68,15 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function login(username, password) {
     const response = await axios.post('/api/auth/login', { username, password })
-    const data = response.data.data
+    const body = response.data
+    // 后端约定：仅 401/403 映射为真实 HTTP 状态码，其余业务错误（如参数校验 400、
+    // 系统异常 500）仍返回 HTTP 200 且 data 为 null。这里必须按 body.code 判定成败，
+    // 否则会直接读 null.access_token，抛出 “Cannot read properties of null”，
+    // 反而盖住真正的失败原因。失败时抛出携带后端 message 的错误，供页面友好提示。
+    if (!body || body.code !== 0 || !body.data) {
+      throw new Error(body?.message || '登录失败，请检查用户名和密码')
+    }
+    const data = body.data
     setToken(data.access_token, data.expires_in)
     setUserInfo(data.user)
     return data

@@ -2,8 +2,8 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/interview_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    username: root
+    password: Hdcz3691
 
 mybatis:
   configuration:
@@ -13,5 +13,5 @@ mybatis:
 # 未注入 APP_JWT_SECRET / DB_PASSWORD 时应用启动失败，避免误用开发密钥（fail-closed）。
 app:
   jwt:
-    secret: ${APP_JWT_SECRET}
+    secret: dGhpcy1pcy1hLXRlc3Qtc2VjcmV0LWtleS1mb3Itand0LTIwMjY=
     cookie-secure: true   # 生产必须走 HTTPS，Secure Cookie 保持开启

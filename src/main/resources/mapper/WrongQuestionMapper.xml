@@ -14,6 +14,17 @@
             updated_at = CURRENT_TIMESTAMP
     </insert>
 
+    <!-- 内部调用版 UPSERT：供 Service 自动加入错题本；语义同 insertOrIncrease。 -->
+    <insert id="insertOrUpdate">
+        INSERT INTO wrong_question (user_id, question_id, wrong_count, mastered)
+        VALUES (#{userId}, #{questionId}, 1, 0)
+        ON DUPLICATE KEY UPDATE
+            wrong_count = wrong_count + 1,
+            last_wrong_at = NOW(),
+            mastered = 0,
+            updated_at = NOW()
+    </insert>
+
     <select id="selectByUserId" resultType="com.example.interviewagent.entity.WrongQuestion">
         SELECT *
         FROM wrong_question
@@ -26,5 +37,87 @@
         SET mastered = 1
         WHERE id = #{id}
     </update>
+
+    <!-- ==================== 错题本统计模块 ====================
+         联表说明：question 表无 category 字段，“分类”取该题第一个标签的 tag.category，
+         故再 LEFT JOIN 一层 question_tag + tag；用 MIN(qt.id) 选定单一标签以稳定分类列。 -->
+
+    <!-- 分页查询错题列表：联表 question(q.question_type/q.difficulty) + tag(t.category)。 -->
+    <select id="selectPageWithQuestion" resultType="com.example.interviewagent.vo.WrongQuestionVO">
+        SELECT
+            wq.id              AS id,
+            wq.question_id     AS questionId,
+            q.title            AS questionTitle,
+            qt_first.category  AS questionCategory,
+            q.difficulty       AS questionDifficulty,
+            q.question_type    AS questionType,
+            wq.wrong_count     AS wrongCount,
+            wq.last_wrong_at  AS lastWrongAt,
+            wq.mastered        AS mastered
+        FROM wrong_question wq
+        LEFT JOIN question q ON q.id = wq.question_id
+        LEFT JOIN (
+            SELECT qt.question_id, t.category
+            FROM question_tag qt
+            INNER JOIN tag t ON t.id = qt.tag_id AND t.deleted = 0
+            WHERE qt.id = (
+                SELECT MIN(qt2.id) FROM question_tag qt2
+                INNER JOIN tag t2 ON t2.id = qt2.tag_id AND t2.deleted = 0
+                WHERE qt2.question_id = qt.question_id
+            )
+        ) qt_first ON qt_first.question_id = q.id
+        WHERE wq.user_id = #{userId}
+        <if test="mastered != null">
+            AND wq.mastered = #{mastered}
+        </if>
+        ORDER BY wq.mastered ASC, wq.last_wrong_at DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <!-- 分页 total：与 selectPageWithQuestion 的 WHERE 完全对齐。 -->
+    <select id="countPageWithQuestion" resultType="long">
+        SELECT COUNT(*)
+        FROM wrong_question wq
+        WHERE wq.user_id = #{userId}
+        <if test="mastered != null">
+            AND wq.mastered = #{mastered}
+        </if>
+    </select>
+
+    <select id="selectByUserIdAndQuestionId" resultType="com.example.interviewagent.entity.WrongQuestion">
+        SELECT *
+        FROM wrong_question
+        WHERE user_id = #{userId}
+          AND question_id = #{questionId}
+    </select>
+
+    <delete id="deleteByUserIdAndQuestionId">
+        DELETE FROM wrong_question
+        WHERE user_id = #{userId}
+          AND question_id = #{questionId}
+    </delete>
+
+    <update id="updateMastered">
+        UPDATE wrong_question
+        SET mastered    = #{mastered},
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+          AND question_id = #{questionId}
+    </update>
+
+    <!-- 随机取一道错题（错题再练）。数据量大时可改方案权衡，当前业务量下 RAND() 足够。 -->
+    <select id="selectRandomWrongQuestionId" resultType="java.lang.Long">
+        SELECT question_id
+        FROM wrong_question
+        WHERE user_id = #{userId}
+        ORDER BY RAND()
+        LIMIT 1
+    </select>
+
+    <select id="countByUserId" resultType="int">
+        SELECT COUNT(*)
+        FROM wrong_question
+        WHERE user_id = #{userId}
+    </select>
 
 </mapper>

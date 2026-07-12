@@ -12,6 +12,12 @@ const ALL_MENUS = [
   // ---- 普通用户 ----
   // 管理员使用“题库管理”，不展示面向刷题的 /questions 页面。
   { index: '/questions', title: '题库', icon: 'Reading', roles: ['USER'] },
+  // 答题记录：查看自己的历史作答（当前不含 AI 判分）。
+  { index: '/answer-records', title: '答题记录', icon: 'Notebook', roles: ['USER'] },
+  // 错题本：手动维护 + 随机错题再练（本阶段不自动加入，等接入 AI 判分后自动累积）。
+  { index: '/wrong-book', title: '错题本', icon: 'WarningFilled', roles: ['USER'] },
+  // 练习统计：自己的总览/分类/薄弱标签/每日趋势。
+  { index: '/statistics', title: '练习统计', icon: 'DataLine', roles: ['USER'] },
   // 个人中心对两类已登录用户均开放。
   { index: '/profile', title: '个人中心', icon: 'User', roles: ['USER', 'ADMIN'] },
   // ---- 仅管理员可见 ----

@@ -4,7 +4,7 @@
 --       本脚本把这些历史脏行连同其标签关联一并物理删除。
 --
 -- 安全前提（执行前已核对）：
---   deleted=1 的题目在 wrong_question、user_answer_record 中均无引用；
+--   deleted=1 的题目在 wrong_question、answer_record 中均无引用；
 --   仅在 question_tag 中存在关联，需先删关联再删题目，避免留下孤儿数据。
 
 START TRANSACTION;

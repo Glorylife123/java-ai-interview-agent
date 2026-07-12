@@ -85,6 +85,24 @@ const routes = [
         meta: { requiresAuth: true, roles: ['USER'], title: '题目详情' },
       },
       {
+        path: 'answer-records',
+        name: 'AnswerRecords',
+        component: () => import('../views/AnswerRecords.vue'),
+        meta: { requiresAuth: true, roles: ['USER'], title: '答题记录' },
+      },
+      {
+        path: 'wrong-book',
+        name: 'WrongBook',
+        component: () => import('../views/WrongBook.vue'),
+        meta: { requiresAuth: true, roles: ['USER'], title: '错题本' },
+      },
+      {
+        path: 'statistics',
+        name: 'Statistics',
+        component: () => import('../views/Statistics.vue'),
+        meta: { requiresAuth: true, roles: ['USER'], title: '练习统计' },
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('../views/Profile.vue'),
