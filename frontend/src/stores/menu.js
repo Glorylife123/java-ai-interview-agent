@@ -18,6 +18,8 @@ const ALL_MENUS = [
   { index: '/wrong-book', title: '错题本', icon: 'WarningFilled', roles: ['USER'] },
   // 练习统计：自己的总览/分类/薄弱标签/每日趋势。
   { index: '/statistics', title: '练习统计', icon: 'DataLine', roles: ['USER'] },
+  // 模拟面试：规则版（发起面试 → 逐题作答即时评分 → 生成报告）。
+  { index: '/interview', title: '模拟面试', icon: 'ChatDotRound', roles: ['USER'] },
   // 个人中心对两类已登录用户均开放。
   { index: '/profile', title: '个人中心', icon: 'User', roles: ['USER', 'ADMIN'] },
   // ---- 仅管理员可见 ----

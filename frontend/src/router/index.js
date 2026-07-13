@@ -103,6 +103,24 @@ const routes = [
         meta: { requiresAuth: true, roles: ['USER'], title: '练习统计' },
       },
       {
+        path: 'interview',
+        name: 'Interview',
+        component: () => import('../views/Interview.vue'),
+        meta: { requiresAuth: true, roles: ['USER'], title: '模拟面试' },
+      },
+      {
+        path: 'interview/:id',
+        name: 'InterviewSession',
+        component: () => import('../views/InterviewSession.vue'),
+        meta: { requiresAuth: true, roles: ['USER'], title: '模拟面试' },
+      },
+      {
+        path: 'interview/:id/report',
+        name: 'InterviewReport',
+        component: () => import('../views/InterviewReport.vue'),
+        meta: { requiresAuth: true, roles: ['USER'], title: '面试报告' },
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('../views/Profile.vue'),
