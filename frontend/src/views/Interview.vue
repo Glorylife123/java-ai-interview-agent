@@ -26,11 +26,11 @@
           <template #default="{ row }"><el-tag :type="statusType(row.status)" effect="plain">{{ statusText(row.status) }}</el-tag></template>
         </el-table-column>
         <el-table-column label="开始时间" width="180"><template #default="{ row }">{{ formatTime(row.startedAt) }}</template></el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button v-if="row.status === 'CREATED'" type="primary" link @click="goSession(row)">开始</el-button>
             <el-button v-else-if="row.status === 'IN_PROGRESS'" type="primary" link @click="goSession(row)">继续</el-button>
-            <el-button v-else-if="row.status === 'FINISHED'" type="success" link @click="goReport(row)">查看报告</el-button>
+            <el-button v-if="row.status === 'IN_PROGRESS' || row.status === 'FINISHED'" type="success" link @click="goReport(row)">答题情况</el-button>
           </template>
         </el-table-column>
       </el-table>

@@ -22,6 +22,8 @@ import com.example.interviewagent.service.InterviewQuestionRecordService;
 import com.example.interviewagent.service.InterviewReportService;
 import com.example.interviewagent.service.InterviewSessionService;
 import com.example.interviewagent.vo.InterviewAnswerResultVO;
+import com.example.interviewagent.vo.InterviewAnswerDetailListVO;
+import com.example.interviewagent.vo.InterviewAnswerDetailVO;
 import com.example.interviewagent.vo.InterviewQuestionVO;
 import com.example.interviewagent.vo.InterviewReportVO;
 import com.example.interviewagent.vo.InterviewSessionVO;
@@ -107,6 +109,9 @@ public class InterviewOrchestrator {
         interviewSessionService.update(update);
 
         InterviewQuestionRecord record = questionGenerator.generateNextQuestion(sessionId);
+        if (record == null) {
+            throw new BusinessException(400, "题库中无符合条件的题目，无法开始面试");
+        }
         return toQuestionVO(record, session.getTotalQuestionCount());
     }
 
@@ -189,8 +194,10 @@ public class InterviewOrchestrator {
         // 是否还有下一题：出题会推进 currentQuestionIndex，此处以已出题数判断更稳妥。
         int answeredCount = record.getSortOrder() + 1;
         boolean hasNext = answeredCount < session.getTotalQuestionCount();
-        if (hasNext) {
-            InterviewQuestionRecord next = questionGenerator.generateNextQuestion(sessionId);
+        // 题库题目可能不足以凑满预设题数：generateNextQuestion 在无题可出时返回 null，
+        // 此时应「提前结束面试」而非抛异常回滚——否则本次已保存的答案与评分会一并丢失，面试卡死。
+        InterviewQuestionRecord next = hasNext ? questionGenerator.generateNextQuestion(sessionId) : null;
+        if (next != null) {
             vo.setIsFinished(false);
             vo.setNextQuestion(toQuestionVO(next, session.getTotalQuestionCount()));
         } else {
@@ -223,6 +230,91 @@ public class InterviewOrchestrator {
         vo.setGeneratorType(report.getGeneratorType());
         vo.setCreatedAt(report.getCreatedAt());
         return vo;
+    }
+
+    /**
+     * 查看本场逐题答题明细：将 题目记录 / 答案 / 评分 三表在 sessionId 维度按
+     * questionRecordId 对齐组装。IN_PROGRESS 中途亦可调用（已答部分可见），
+     * 不要求面试已结束。
+     */
+    @Transactional(readOnly = true)
+    public InterviewAnswerDetailListVO getAnswerDetails(Long userId, Long sessionId) {
+        InterviewSession session = loadOwnedSession(userId, sessionId);
+        if (STATUS_CREATED.equals(session.getStatus())) {
+            // 尚未开始的面试没有题目记录与作答，直接返回空明细，避免下游查询无意义数据。
+            InterviewAnswerDetailListVO empty = new InterviewAnswerDetailListVO();
+            empty.setSessionId(sessionId);
+            empty.setTitle(session.getTitle());
+            empty.setPosition(session.getPosition());
+            empty.setDifficulty(session.getDifficulty());
+            empty.setStatus(session.getStatus());
+            empty.setTotalQuestionCount(session.getTotalQuestionCount());
+            empty.setAnsweredCount(0);
+            empty.setDetails(new ArrayList<>());
+            return empty;
+        }
+
+        List<InterviewQuestionRecord> records = interviewQuestionRecordService.listBySessionId(sessionId);
+        List<InterviewAnswer> answers = interviewAnswerService.listBySessionId(sessionId);
+        List<InterviewEvaluation> evaluations = interviewEvaluationService.listBySessionId(sessionId);
+
+        // 答案按 questionRecordId 索引（一题至多一条）。
+        Map<Long, InterviewAnswer> answerByRecord = new LinkedHashMap<>();
+        for (InterviewAnswer a : answers) {
+            answerByRecord.put(a.getQuestionRecordId(), a);
+        }
+        // 评分同样按 questionRecordId 索引。
+        Map<Long, InterviewEvaluation> evalByRecord = new LinkedHashMap<>();
+        for (InterviewEvaluation e : evaluations) {
+            evalByRecord.put(e.getQuestionRecordId(), e);
+        }
+
+        // 为补全题型（competency 即题型兜底，但单独冗余一份便于前端展示），按 questionId 批量取题库题型。
+        // records 通常很少（≤20），逐条查询可接受；若后续扩展可改批量查询。
+        List<InterviewAnswerDetailVO> details = new ArrayList<>(records.size());
+        for (InterviewQuestionRecord r : records) {
+            InterviewAnswerDetailVO vo = new InterviewAnswerDetailVO();
+            vo.setQuestionRecordId(r.getId());
+            vo.setQuestionId(r.getQuestionId());
+            vo.setSortOrder(r.getSortOrder());
+            vo.setQuestionContent(r.getQuestionContent());
+            vo.setCompetency(r.getCompetency());
+            vo.setDifficulty(r.getDifficulty());
+            // 题型：优先取题库当前题型；若题库该题已删，则回退到 competency 兜底。
+            Question question = questionMapper.selectById(r.getQuestionId());
+            vo.setQuestionType(question != null ? question.getQuestionType() : r.getCompetency());
+
+            InterviewAnswer answer = answerByRecord.get(r.getId());
+            if (answer != null) {
+                vo.setAnswered(true);
+                vo.setAnswerContent(answer.getAnswerContent());
+                vo.setDurationSeconds(answer.getDurationSeconds());
+            } else {
+                vo.setAnswered(false);
+            }
+
+            InterviewEvaluation eval = evalByRecord.get(r.getId());
+            if (eval != null) {
+                vo.setScore(eval.getScore());
+                vo.setMaxScore(eval.getMaxScore());
+                vo.setLevel(eval.getLevel());
+                vo.setMatchedPoints(splitPoints(eval.getMatchedPoints()));
+                vo.setMissingPoints(splitPoints(eval.getMissingPoints()));
+                vo.setSuggestion(eval.getSuggestion());
+            }
+            details.add(vo);
+        }
+
+        InterviewAnswerDetailListVO result = new InterviewAnswerDetailListVO();
+        result.setSessionId(sessionId);
+        result.setTitle(session.getTitle());
+        result.setPosition(session.getPosition());
+        result.setDifficulty(session.getDifficulty());
+        result.setStatus(session.getStatus());
+        result.setTotalQuestionCount(session.getTotalQuestionCount());
+        result.setAnsweredCount(details.size());
+        result.setDetails(details);
+        return result;
     }
 
     /** 列出当前用户的全部面试历史（会话摘要，按创建时间倒序）。 */
@@ -288,6 +380,21 @@ public class InterviewOrchestrator {
             return "";
         }
         return String.join("\n", points);
+    }
+
+    /** 将持久化的命中/缺失得分点按换行拆回列表（与 joinPoints 对称），空串返回空列表。 */
+    private List<String> splitPoints(String joined) {
+        if (!StringUtils.hasText(joined)) {
+            return new ArrayList<>();
+        }
+        List<String> result = new ArrayList<>();
+        for (String p : joined.split("\n")) {
+            String trimmed = p.trim();
+            if (StringUtils.hasText(trimmed)) {
+                result.add(trimmed);
+            }
+        }
+        return result;
     }
 
     /** 反序列化维度得分 JSON；异常或空时返回空 Map，不阻断报告展示。 */

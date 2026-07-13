@@ -3,7 +3,6 @@ package com.example.interviewagent.interview.generator;
 import com.example.interviewagent.entity.InterviewQuestionRecord;
 import com.example.interviewagent.entity.InterviewSession;
 import com.example.interviewagent.entity.Question;
-import com.example.interviewagent.exception.BusinessException;
 import com.example.interviewagent.interview.InterviewDifficulty;
 import com.example.interviewagent.mapper.QuestionMapper;
 import com.example.interviewagent.service.InterviewQuestionRecordService;
@@ -38,7 +37,10 @@ public class RuleBasedQuestionGenerator implements QuestionGenerator {
         Integer questionDifficulty = InterviewDifficulty.toQuestionDifficulty(session.getDifficulty());
         Question question = questionMapper.selectRandomForInterview(questionDifficulty, excludeIds);
         if (question == null) {
-            throw new BusinessException(400, "题库中无符合条件的题目");
+            // 题库中已无符合条件（指定难度、本场未出过、已上架）的题目。
+            // 这里返回 null 而非抛异常：由编排器决定「开始阶段无题→报错」还是「面试中途题库耗尽→提前结束」，
+            // 避免因抛异常回滚整个提交事务，导致用户已作答的内容丢失、面试卡死。
+            return null;
         }
 
         int sortOrder = session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex();

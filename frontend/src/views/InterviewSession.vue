@@ -1,6 +1,13 @@
 <template>
   <section v-loading="loading">
-    <el-page-header :content="session ? session.title : '模拟面试'" @back="router.push('/interview')" />
+    <el-page-header :content="session ? session.title : '模拟面试'" @back="router.push('/interview')">
+      <template #extra>
+        <!-- 中途或结束后均可查看已答每一题的作答与评分反馈 -->
+        <el-button v-if="session && session.status !== 'CREATED'" link type="primary" @click="goReport">
+          查看我的答题情况
+        </el-button>
+      </template>
+    </el-page-header>
 
     <el-card v-if="session" class="interview-card">
       <template #header>
@@ -141,11 +148,16 @@ async function init() {
       router.replace(`/interview/${sessionId}/report`)
       return
     }
-    if (session.value.status === 'CREATED') {
-      question.value = (await axios.post(`/api/interview/session/${sessionId}/start`)).data.data
-    } else {
-      question.value = (await axios.get(`/api/interview/session/${sessionId}/current-question`)).data.data
+    // 与 submit 同理：start / current-question 的业务错误也走 HTTP 200 + code≠0，需显式判定。
+    const body = session.value.status === 'CREATED'
+      ? (await axios.post(`/api/interview/session/${sessionId}/start`)).data
+      : (await axios.get(`/api/interview/session/${sessionId}/current-question`)).data
+    if (!body || body.code !== 0) {
+      ElMessage.error(body?.message || '进入面试失败')
+      router.push('/interview')
+      return
     }
+    question.value = body.data
     startTimer()
   } catch (error) {
     ElMessage.error(error.response?.data?.message || '进入面试失败')
@@ -167,7 +179,15 @@ async function submit() {
       answerContent: userAnswer.value.trim(),
       durationSeconds: elapsed.value,
     }
-    feedback.value = (await axios.post(`/api/interview/session/${sessionId}/answer`, payload)).data.data
+    const body = (await axios.post(`/api/interview/session/${sessionId}/answer`, payload)).data
+    // 后端约定：仅 401/403 映射为真实 HTTP 状态码，其余业务错误（400/404/409/500）仍返回
+    // HTTP 200 且 data 为 null。必须按 body.code 判定成败，否则错误会被静默吞掉，
+    // 表现为「点了提交没反应」。
+    if (!body || body.code !== 0) {
+      ElMessage.error(body?.message || '提交失败')
+      return
+    }
+    feedback.value = body.data
     answered.value = true
     stopTimer()
   } catch (error) {

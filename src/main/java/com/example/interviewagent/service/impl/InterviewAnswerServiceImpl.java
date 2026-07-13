@@ -6,6 +6,8 @@ import com.example.interviewagent.service.InterviewAnswerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class InterviewAnswerServiceImpl implements InterviewAnswerService {
@@ -25,5 +27,10 @@ public class InterviewAnswerServiceImpl implements InterviewAnswerService {
     @Override
     public InterviewAnswer getByQuestionRecordId(Long questionRecordId) {
         return interviewAnswerMapper.selectByQuestionRecordId(questionRecordId);
+    }
+
+    @Override
+    public List<InterviewAnswer> listBySessionId(Long sessionId) {
+        return interviewAnswerMapper.selectBySessionId(sessionId);
     }
 }
