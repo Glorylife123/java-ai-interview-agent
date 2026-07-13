@@ -11,6 +11,14 @@ public interface QuestionMapper {
 
     Question selectById(@Param("id") Long id);
 
+    /**
+     * 面试出题：随机取一道未出过、且（可选）指定难度的上架题目。
+     * 排除逻辑删除、排除 excludeIds 中已出过的题；difficulty 为 null 时不按难度过滤。
+     * 使用 ORDER BY RAND() LIMIT 1 随机选一题。
+     */
+    Question selectRandomForInterview(@Param("difficulty") Integer difficulty,
+                                      @Param("excludeIds") List<Long> excludeIds);
+
     List<Question> selectPage(@Param("keyword") String keyword,
                               @Param("difficulty") Integer difficulty,
                               @Param("questionTypeValues") List<String> questionTypeValues,

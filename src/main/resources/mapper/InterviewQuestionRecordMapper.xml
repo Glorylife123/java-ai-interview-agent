@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interviewagent.mapper.InterviewQuestionRecordMapper">
+
+    <insert id="insert" parameterType="com.example.interviewagent.entity.InterviewQuestionRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO interview_question_record (
+            session_id, question_id, question_content, competency,
+            difficulty, sort_order, source_type
+        )
+        VALUES (
+            #{sessionId}, #{questionId}, #{questionContent}, #{competency},
+            #{difficulty}, #{sortOrder}, #{sourceType}
+        )
+    </insert>
+
+    <select id="selectById" resultType="com.example.interviewagent.entity.InterviewQuestionRecord">
+        SELECT *
+        FROM interview_question_record
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectBySessionId" resultType="com.example.interviewagent.entity.InterviewQuestionRecord">
+        SELECT *
+        FROM interview_question_record
+        WHERE session_id = #{sessionId}
+        ORDER BY sort_order ASC
+    </select>
+
+    <select id="countBySessionId" resultType="int">
+        SELECT COUNT(*)
+        FROM interview_question_record
+        WHERE session_id = #{sessionId}
+    </select>
+
+    <select id="selectBySessionIdAndOrder" resultType="com.example.interviewagent.entity.InterviewQuestionRecord">
+        SELECT *
+        FROM interview_question_record
+        WHERE session_id = #{sessionId}
+          AND sort_order = #{sortOrder}
+        LIMIT 1
+    </select>
+
+</mapper>

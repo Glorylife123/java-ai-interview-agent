@@ -1,8 +1,8 @@
 # Java AI Interview Agent
 
-一个面向 Java 技术面试场景的前后端分离题库与刷题后台。目前已经完成用户、题目、标签、答题提交、答题记录、错题本、练习统计、权限控制以及双 JWT 会话管理，用户侧已具备基础的刷题闭环（答题 → 记录 → 错题本 → 统计），可作为后续接入 AI 模拟面试、智能评分和面试报告的业务底座。
+一个面向 Java 技术面试场景的前后端分离题库与刷题后台。目前已经完成用户、题目、标签、答题提交、答题记录、错题本、练习统计、权限控制以及双 JWT 会话管理，用户侧已具备基础的刷题闭环（答题 → 记录 → 错题本 → 统计），并新增**规则版模拟面试模块**（发起面试 → 逐题作答 → 即时关键词评分 → 生成面试报告），可作为后续接入 AI 模拟面试、智能评分和面试报告的业务底座。
 
-> 当前版本暂未接入大模型，答题判分仅做标准答案回显与占位逻辑，错题暂不自动累积，预留为接入 AI 评分后的自动收集入口。项目名称中的 AI Interview Agent 属于后续规划，不把未完成能力描述为已实现功能。
+> 当前版本暂未接入大模型。模拟面试的评分与报告生成基于规则（标准答案关键句命中率），不调用任何外部 AI 接口；普通答题判分仅做标准答案回显与占位逻辑，错题暂不自动累积，预留为接入 AI 评分后的自动收集入口。项目名称中的 AI Interview Agent 属于后续规划，不把未完成能力描述为已实现功能。
 
 ## 目录
 
@@ -20,7 +20,7 @@
 
 本项目用于搭建 Java 面试学习与管理平台，区分普通用户和管理员两类角色：
 
-- **普通用户**：注册登录、浏览题库、按条件筛选题目、查看题目详情、提交答题、查看答题历史、错题本复习、查看练习统计、维护个人资料和修改密码。
+- **普通用户**：注册登录、浏览题库、按条件筛选题目、查看题目详情、提交答题、查看答题历史、错题本复习、查看练习统计、发起模拟面试并获取逐题评分与面试报告、维护个人资料和修改密码。
 - **管理员**：查看数据概览，管理用户、题目和标签，重置用户密码、禁用用户以及吊销用户会话。
 - **系统基础能力**：答题记录、错题累计、练习统计、逻辑删除、双令牌认证和 Refresh Token 轮换。
 
@@ -128,7 +128,26 @@
 - 薄弱标签：默认前 5 个错误最多的标签
 - 每日趋势：默认最近 30 天的练习量（缺失日期不补 0）
 
-### 7. 前端页面
+### 7. 模拟面试（规则版，无 AI）
+
+完整模拟面试闭环，全部判分与报告生成基于规则，不调用任何外部 AI 接口：
+
+- 发起面试会话：选择岗位、难度（简单/中等/困难）、题数（默认 5，上限 20），状态置为 `CREATED`
+- 开始面试：状态 `CREATED → IN_PROGRESS`，由出题策略从题库随机抽取符合难度、本场未出过的上架题目
+- 题目内容快照：出题时把 `question.content` 复制到 `interview_question_record.question_content`，防止题库后续修改影响面试记录
+- 逐题作答：提交回答后即时规则评分，返回本次得分、等级、命中/缺失得分点与改进建议，并给出下一题
+- 重复提交防护：同一题目记录只接受一次回答
+- 完成面试：答完最后一题，状态 `IN_PROGRESS → FINISHED`，生成面试报告
+- 面试报告：总体均分、各维度（题型/能力）得分、总结评语、学习建议
+- 状态流转约束：只有 `CREATED` 才能 `start`，只有 `IN_PROGRESS` 才能提交回答，`FINISHED` 后不可再操作
+
+**评分规则（RuleBasedAnswerEvaluator）**：将标准答案按中文标点（。！？；）切分为关键句，统计用户回答命中的关键句数量；命中率映射为百分制得分与等级（≥80 优秀、≥60 良好、≥40 一般、<40 较差）。关键句直接被包含即命中，否则取其核心词（长度 ≥ 2）按多数（≥60%）包含判定。
+
+**报告生成（RuleBasedInterviewReportGenerator）**：总体得分 = 各题得分均值；按题目题型/能力汇总维度得分；依据总分区间生成总结评语；从各题缺失得分点中提取高频知识点组合为学习建议；维度得分与建议用 Jackson 序列化为 JSON 持久化，`session_id` 唯一，更新采用「先删后插」。
+
+**编排与事务**：核心流程由 `InterviewOrchestrator` 串联出题策略、评分策略、报告策略，所有写多表的方法加 `@Transactional` 保证原子性（主类已启用 `@EnableTransactionManagement`）。出题策略、评分策略、报告策略均以接口 + 规则实现的形式组织在 `interview/` 包下，后续接入 AI 只需新增对应实现并切换。
+
+### 8. 前端页面
 
 | 路由 | 页面 | 访问角色 |
 | --- | --- | --- |
@@ -139,13 +158,16 @@
 | `/answer-records` | 答题记录 | 已登录用户 |
 | `/wrong-book` | 错题本 | 已登录用户 |
 | `/statistics` | 练习统计 | 已登录用户 |
+| `/interview` | 模拟面试（列表 + 发起面试） | 已登录用户 |
+| `/interview/:id` | 模拟面试作答（逐题评分反馈） | 已登录用户 |
+| `/interview/:id/report` | 面试报告（总分/维度/建议） | 已登录用户 |
 | `/profile` | 个人中心 | 已登录用户 |
 | `/admin/dashboard` | 数据概览 | 管理员 |
 | `/admin/questions` | 题库管理 | 管理员 |
 | `/admin/tags` | 标签管理 | 管理员 |
 | `/admin/users` | 用户管理 | 管理员 |
 
-### 8. 接口文档
+### 9. 接口文档
 
 接入 springdoc-openapi + Knife4j，提供两套等价 UI：
 
@@ -183,6 +205,7 @@ src/main/java/com/example/interviewagent
 ├─ mapper       # MyBatis Mapper 接口
 ├─ security     # JWT、Cookie、认证与管理员拦截器
 ├─ service      # 业务接口与实现
+├─ interview    # 模拟面试策略包（出题/评分/报告接口与规则实现、流程编排器）
 └─ store        # Refresh Token 存储抽象及 MySQL 实现
 ```
 
@@ -190,6 +213,7 @@ src/main/java/com/example/interviewagent
 
 ```text
 Controller → Service / ServiceImpl → Mapper / Store → MySQL
+Controller(Interview) → InterviewOrchestrator → 出题/评分/报告策略 → Mapper → MySQL
 ```
 
 Refresh Token 单独抽象为 `RefreshTokenStore`，令牌业务不直接依赖 MyBatis Mapper，后续可替换为 Redis 等存储实现。
@@ -203,6 +227,53 @@ Refresh Token 单独抽象为 `RefreshTokenStore`，令牌业务不直接依赖 
 - `AdminWriteAuthInterceptor`：题目和标签允许已登录用户读取，但新增、编辑和删除只允许管理员执行。
 
 前端 Vue Router 根据登录状态与角色控制页面入口；后端拦截器负责最终权限边界，不能仅通过隐藏菜单代替服务端鉴权。
+
+### 模拟面试流程
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant C as InterviewController
+    participant O as InterviewOrchestrator
+    participant Q as 出题策略
+    participant E as 评分策略
+    participant R as 报告策略
+    participant D as MySQL
+
+    U->>C: POST /api/interview/session
+    C->>O: createSession
+    O->>D: 插入会话(状态 CREATED)
+    C-->>U: 会话摘要
+
+    U->>C: POST /session/{id}/start
+    C->>O: startInterview
+    O->>D: 更新状态 IN_PROGRESS
+    O->>Q: generateNextQuestion
+    Q->>D: 随机抽题+插入题目记录+推进会话游标
+    C-->>U: 第一题
+
+    loop 逐题作答
+        U->>C: POST /session/{id}/answer
+        C->>O: submitAnswer
+        O->>D: 存答案(防重复)
+        O->>E: evaluate (规则关键字匹配)
+        O->>D: 存评分
+        alt 还有下一题
+            O->>Q: generateNextQuestion
+            C-->>U: 本次得分 + 下一题
+        else 已答完
+            O->>D: 状态 FINISHED + ended_at
+            O->>R: generateReport
+            R->>D: 先删后插报告
+            C-->>U: 本次得分 + isFinished
+        end
+    end
+
+    U->>C: GET /session/{id}/report
+    C->>O: getReport
+    O->>D: 查询报告(反序列化 JSON)
+    C-->>U: 报告 VO
+```
 
 ### 令牌刷新流程
 
@@ -241,6 +312,13 @@ erDiagram
     QUESTION ||--o{ USER_ANSWER_RECORD : answered
     QUESTION ||--o{ WRONG_QUESTION : recorded
     REFRESH_TOKENS ||--o{ REFRESH_TOKENS : rotates
+    USER ||--o{ INTERVIEW_SESSION : owns
+    INTERVIEW_SESSION ||--o{ INTERVIEW_QUESTION_RECORD : contains
+    INTERVIEW_SESSION ||--o{ INTERVIEW_ANSWER : collects
+    INTERVIEW_SESSION ||--|| INTERVIEW_REPORT : produces
+    INTERVIEW_QUESTION_RECORD ||--o{ INTERVIEW_ANSWER : answered_by
+    INTERVIEW_QUESTION_RECORD ||--o{ INTERVIEW_EVALUATION : graded_by
+    INTERVIEW_ANSWER ||--|| INTERVIEW_EVALUATION : produces
 ```
 
 ### `user` 用户表
@@ -328,6 +406,16 @@ question 1 ── N question_tag N ── 1 tag
 - `INDEX (parent_jti)`
 - `INDEX (user_id)`
 - `INDEX (user_id, device_id)`
+
+### 模拟面试相关表（`interview_*`）
+
+规则版模拟面试模块共 5 张表，建表脚本见 `sql/interview.sql`（全部 `IF NOT EXISTS`，可重复执行）：
+
+- `interview_session`：面试会话。核心字段 `user_id`、`position`、`difficulty`（简单/中等/困难）、`status`（CREATED/IN_PROGRESS/FINISHED/CANCELLED）、`total_question_count`、`current_question_index`、`started_at`、`ended_at`。
+- `interview_question_record`：面试题目记录。`question_id` 关联题库，`question_content` 为出题时的题目内容快照，`competency` 记录考察能力/题型，`sort_order` 为题目顺序，`source_type`（QUESTION_BANK/RULE/AI）。
+- `interview_answer`：面试答案。一个 `question_record_id` 至多一条记录，用于防止重复提交。
+- `interview_evaluation`：面试评分。`score`（0-100）、`level`（优秀/良好/一般/较差）、`matched_points`/`missing_points`（换行分隔的关键句）、`suggestion`、`evaluator_type`（RULE/AI/MANUAL）。
+- `interview_report`：面试报告。`overall_score`、`summary`、`dimension_scores_json`/`suggestions_json`（JSON）、`generator_type`，`session_id` 唯一（`uk_session_id`）。
 
 ### 数据迁移脚本
 
@@ -438,6 +526,31 @@ keyword、difficulty、questionType、tagId、pageNum、pageSize
 | GET | `/api/stat/category` | 按标签分类的答题统计 |
 | GET | `/api/stat/weak-tags` | 薄弱标签列表（默认前 5） |
 | GET | `/api/stat/daily` | 每日练习趋势（默认最近 30 天） |
+
+### 模拟面试接口
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/interview/session` | 创建面试会话（岗位、难度、题数），状态 CREATED |
+| POST | `/api/interview/session/{sessionId}/start` | 开始面试，置 IN_PROGRESS 并返回第一题 |
+| GET | `/api/interview/session/{sessionId}/current-question` | 获取当前题目（不推进流程） |
+| POST | `/api/interview/session/{sessionId}/answer` | 提交回答：即时规则评分，返回得分/等级/命中缺失点/建议及下一题，或标记面试完成 |
+| GET | `/api/interview/session/{sessionId}/report` | 获取面试报告（直接查询，不重新生成） |
+| GET | `/api/interview/sessions` | 列出当前用户全部面试历史 |
+
+创建面试入参 `InterviewCreateDTO`：
+
+```json
+{ "position": "Java后端实习生", "difficulty": "中等", "totalQuestionCount": 5 }
+```
+
+提交回答入参 `InterviewAnswerSubmitDTO`：
+
+```json
+{ "questionRecordId": 123, "answerContent": "...", "durationSeconds": 120 }
+```
+
+> 模拟面试接口同样从认证拦截器注入的 `authUserId` 获取当前用户，校验会话归属；事故码沿用 400（参数/无题）、404（资源不存在）、409（状态冲突）。题库需有对应难度、未逻辑删除的上架题目，否则出题抛 400「题库中无符合条件的题目」。
 
 > 答题、错题和统计接口均从认证拦截器注入的 `authUserId` 获取当前用户，不信任客户端传入的 `userId`。
 
@@ -649,10 +762,10 @@ Axios 自动添加 Access Token、刷新过期令牌、排队重放并发请求�
 
 - [ ] 接入大模型服务
 - [ ] 根据目标岗位、技术栈和难度生成面试问题
-- [ ] 实现多轮模拟面试会话
-- [ ] 对开放题回答进行结构化评分和点评
-- [ ] 生成知识薄弱点、改进建议和面试报告
-- [ ] 建立面试会话、消息和评估结果数据模型
+- [x] 实现多轮模拟面试会话（规则版已落地：会话状态机 + 逐题出题 + 即时评分 + 报告，见 [模拟面试模块](#7-模拟面试规则版无-ai)）
+- [ ] 对开放题回答进行结构化评分和点评（规则版关键词评分已实现，AI 结构化评分待接入）
+- [x] 生成知识薄弱点、改进建议和面试报告（规则版已实现，AI 报告待接入）
+- [x] 建立面试会话、消息和评估结果数据模型（`interview_*` 5 张表）
 - [ ] 增加 Prompt 版本、模型配置、超时、重试和成本统计
 
 ### 优先级四：工程质量
