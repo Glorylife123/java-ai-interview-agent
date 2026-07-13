@@ -27,4 +27,11 @@
         LIMIT 1
     </select>
 
+    <select id="selectBySessionId" resultType="com.example.interviewagent.entity.InterviewAnswer">
+        SELECT *
+        FROM interview_answer
+        WHERE session_id = #{sessionId}
+        ORDER BY id ASC
+    </select>
+
 </mapper>

@@ -6,6 +6,7 @@ import com.example.interviewagent.dto.InterviewCreateDTO;
 import com.example.interviewagent.entity.InterviewSession;
 import com.example.interviewagent.interview.orchestrator.InterviewOrchestrator;
 import com.example.interviewagent.vo.InterviewAnswerResultVO;
+import com.example.interviewagent.vo.InterviewAnswerDetailListVO;
 import com.example.interviewagent.vo.InterviewQuestionVO;
 import com.example.interviewagent.vo.InterviewReportVO;
 import com.example.interviewagent.vo.InterviewSessionVO;
@@ -67,6 +68,13 @@ public class InterviewController {
     public Result<InterviewReportVO> report(@PathVariable Long sessionId,
                                             @RequestAttribute("authUserId") Long userId) {
         return Result.success(interviewOrchestrator.getReport(userId, sessionId));
+    }
+
+    /** 查看本场逐题答题明细（题目内容、我的作答、耗时、得分、命中/缺失点、建议）。 */
+    @GetMapping("/session/{sessionId}/answers")
+    public Result<InterviewAnswerDetailListVO> answers(@PathVariable Long sessionId,
+                                                       @RequestAttribute("authUserId") Long userId) {
+        return Result.success(interviewOrchestrator.getAnswerDetails(userId, sessionId));
     }
 
     /** 列出当前用户的全部面试历史。 */
