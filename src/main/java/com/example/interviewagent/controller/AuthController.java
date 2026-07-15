@@ -32,8 +32,7 @@ public class AuthController {
         User user = authService.register(
                 request.getUsername(),
                 request.getPassword(),
-                request.getNickname(),
-                request.getRole()
+                request.getNickname()
         );
         user.setPasswordHash(null);
         return Result.success(user);
@@ -80,7 +79,6 @@ public class AuthController {
         private String username;
         private String password;
         private String nickname;
-        private String role;
     }
 
     @Data

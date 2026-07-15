@@ -20,7 +20,7 @@ public class AuthServiceImpl implements AuthService {
     private final TokenService tokenService;
 
     @Override
-    public User register(String username, String password, String nickname, String role) {
+    public User register(String username, String password, String nickname) {
         if (!StringUtils.hasText(username)) {
             throw new BusinessException(400, "用户名不能为空");
         }
@@ -38,7 +38,7 @@ public class AuthServiceImpl implements AuthService {
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setNickname(nickname);
-        user.setRole(StringUtils.hasText(role) && role.equals("ADMIN") ? "ADMIN" : "USER");
+        user.setRole("USER");
         user.setStatus(1);
         userMapper.insert(user);
         return userMapper.selectById(user.getId());

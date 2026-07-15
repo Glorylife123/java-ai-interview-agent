@@ -4,10 +4,7 @@ import com.example.interviewagent.common.PageResult;
 import com.example.interviewagent.controller.dto.QuestionResponse;
 import com.example.interviewagent.dto.WrongQuestionQueryDTO;
 import com.example.interviewagent.entity.Question;
-import com.example.interviewagent.entity.WrongQuestion;
 import com.example.interviewagent.vo.WrongQuestionVO;
-
-import java.util.List;
 
 public interface WrongQuestionService {
 
@@ -38,12 +35,4 @@ public interface WrongQuestionService {
     /** 统计错题数量，供统计模块调用。 */
     int countWrongQuestions(Long userId);
 
-    // ---------- 兼容旧接口 ----------
-
-    WrongQuestion create(WrongQuestion wrongQuestion);
-
-    List<WrongQuestion> listByUserId(Long userId);
-
-    /** 按错题记录主键设为已掌握（旧入口，保留以防他处引用）。 */
-    void markMastered(Long id);
 }

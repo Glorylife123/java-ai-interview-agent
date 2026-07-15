@@ -115,7 +115,6 @@
 - 错题本分页查询（带回题目信息），未掌握题目优先展示
 - 标记错题为已掌握 / 取消掌握，以及物理移除错题
 - 随机抽取一道错题的完整详情，用于错题再练
-- 旧版兼容接口 `/api/wrong-questions/**` 在迁移过渡期保留
 
 > 用户身份统一由认证拦截器注入的 `authUserId` 提供，答题与错题接口不信任客户端传入的 `userId`。
 
@@ -424,6 +423,7 @@ question 1 ── N question_tag N ── 1 tag
 - 题目类型规范化脚本
 - 逻辑删除题目的历史数据清理脚本
 - 无效或过期 Refresh Token 清理脚本
+- 模拟面试题目、答案和评分唯一约束脚本
 
 > 当前仓库尚未提供完整的数据库初始化 DDL。首次部署前需要创建 `interview_agent` 数据库及上述业务表，后续计划引入 Flyway 或 Liquibase 管理完整表结构和版本迁移。
 
@@ -514,9 +514,6 @@ keyword、difficulty、questionType、tagId、pageNum、pageSize
 | DELETE | `/api/wrong/{questionId}` | 物理移除错题 |
 | PUT | `/api/wrong/{questionId}/mastered` | 标记已掌握 / 取消掌握 |
 | GET | `/api/wrong/random` | 随机获取一道错题的完整详情 |
-| POST | `/api/wrong-questions` | 新增或累加错题（旧版兼容） |
-| GET | `/api/wrong-questions/users/{userId}` | 查询用户错题（旧版兼容） |
-| PUT | `/api/wrong-questions/{id}/mastered` | 标记错题为已掌握（旧版兼容） |
 
 ### 练习统计接口
 
@@ -740,11 +737,11 @@ Axios 自动添加 Access Token、刷新过期令牌、排队重放并发请求�
 
 - [ ] 补充完整数据库初始化脚本
 - [ ] 引入 Flyway 或 Liquibase 管理表结构和版本迁移
-- [ ] 公开注册固定创建普通用户，管理员由受控流程创建
+- [x] 公开注册固定创建普通用户，管理员由受控流程创建
 - [ ] 收紧用户列表、用户详情的读取权限
-- [ ] 答题记录和错题接口从登录态获取用户身份，不信任客户端传入的 `userId`
-- [ ] 校验错题记录的所有权
-- [ ] 统一使用正确的 HTTP 400、404、500 状态码
+- [x] 答题记录和错题接口从登录态获取用户身份，不信任客户端传入的 `userId`
+- [x] 校验错题记录的所有权
+- [x] 统一使用正确的 HTTP 400、401、403、404、409、500 状态码
 - [ ] 管理员创建用户时统一接收明文 `password` 并在服务端 BCrypt 编码
 
 ### 优先级二：完成刷题闭环与 AI 接入
