@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS `interview_question_record` (
   `source_type` varchar(20) NOT NULL DEFAULT 'QUESTION_BANK' COMMENT '来源：QUESTION_BANK / RULE / AI',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
-  KEY `idx_session_id` (`session_id`)
+  KEY `idx_session_id` (`session_id`),
+  UNIQUE KEY `uk_interview_question_session_order` (`session_id`, `sort_order`),
+  UNIQUE KEY `uk_interview_question_session_question` (`session_id`, `question_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='面试题目记录';
 
 -- 面试答案表
@@ -46,7 +48,7 @@ CREATE TABLE IF NOT EXISTS `interview_answer` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '提交时间',
   PRIMARY KEY (`id`),
   KEY `idx_session_id` (`session_id`),
-  KEY `idx_question_record_id` (`question_record_id`)
+  UNIQUE KEY `uk_interview_answer_question_record` (`question_record_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='面试答案';
 
 -- 面试评分表
@@ -65,7 +67,8 @@ CREATE TABLE IF NOT EXISTS `interview_evaluation` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   KEY `idx_session_id` (`session_id`),
-  KEY `idx_question_record_id` (`question_record_id`)
+  UNIQUE KEY `uk_interview_evaluation_question_record` (`question_record_id`),
+  UNIQUE KEY `uk_interview_evaluation_answer` (`answer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='面试评分';
 
 -- 面试报告表

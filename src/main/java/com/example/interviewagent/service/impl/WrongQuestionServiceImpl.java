@@ -4,15 +4,12 @@ import com.example.interviewagent.common.PageResult;
 import com.example.interviewagent.controller.dto.QuestionResponse;
 import com.example.interviewagent.dto.WrongQuestionQueryDTO;
 import com.example.interviewagent.entity.Question;
-import com.example.interviewagent.entity.WrongQuestion;
 import com.example.interviewagent.exception.BusinessException;
 import com.example.interviewagent.mapper.WrongQuestionMapper;
 import com.example.interviewagent.service.QuestionService;
-import com.example.interviewagent.service.UserService;
 import com.example.interviewagent.service.WrongQuestionService;
 import com.example.interviewagent.vo.WrongQuestionVO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,10 +19,7 @@ import java.util.List;
 public class WrongQuestionServiceImpl implements WrongQuestionService {
 
     private final WrongQuestionMapper wrongQuestionMapper;
-    private final UserService userService;
-    // @Lazy：QuestionService 同时持有 WrongQuestionService（见 increaseSubmitCount 调用链可能反向依赖此处），
-    // 用懒加载打破构造期相互注入形成的循环依赖。
-    private final @Lazy QuestionService questionService;
+    private final QuestionService questionService;
 
     // ==================== 自动加入错题本（供后续 AI 判错时调用） ====================
 
@@ -133,39 +127,6 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
             return 0;
         }
         return wrongQuestionMapper.countByUserId(userId);
-    }
-
-    // ==================== 兼容旧接口 ====================
-
-    @Override
-    public WrongQuestion create(WrongQuestion wrongQuestion) {
-        if (wrongQuestion == null || wrongQuestion.getUserId() == null || wrongQuestion.getQuestionId() == null) {
-            throw new BusinessException(400, "用户ID和题目ID不能为空");
-        }
-        userService.getById(wrongQuestion.getUserId());
-        questionService.getById(wrongQuestion.getQuestionId());
-        wrongQuestionMapper.insertOrIncrease(wrongQuestion);
-        return wrongQuestionMapper.selectByUserIdAndQuestionId(
-                wrongQuestion.getUserId(), wrongQuestion.getQuestionId());
-    }
-
-    @Override
-    public List<WrongQuestion> listByUserId(Long userId) {
-        if (userId == null) {
-            return List.of();
-        }
-        userService.getById(userId);
-        return wrongQuestionMapper.selectByUserId(userId);
-    }
-
-    @Override
-    public void markMastered(Long id) {
-        if (id == null) {
-            throw new BusinessException(400, "错题记录ID不能为空");
-        }
-        if (wrongQuestionMapper.markMastered(id) == 0) {
-            throw new BusinessException(404, "错题记录不存在");
-        }
     }
 
     // ---------- 分页参数规范化 ----------

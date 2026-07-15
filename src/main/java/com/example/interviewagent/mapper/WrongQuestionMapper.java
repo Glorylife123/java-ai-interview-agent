@@ -10,15 +10,8 @@ import java.util.List;
 @Mapper
 public interface WrongQuestionMapper {
 
-    /** INSERT 或 UPSERT：唯一键 (user_id, question_id) 冲突时累加错误次数并刷新最近答错时间。 */
-    int insertOrIncrease(WrongQuestion wrongQuestion);
-
     /** 内部调用版 UPSERT（供 Service 自动加入错题本使用）。 */
     int insertOrUpdate(@Param("userId") Long userId, @Param("questionId") Long questionId);
-
-    List<WrongQuestion> selectByUserId(@Param("userId") Long userId);
-
-    int markMastered(@Param("id") Long id);
 
     // ==================== 错题本统计模块 ====================
 

@@ -4,7 +4,7 @@ import com.example.interviewagent.entity.User;
 
 public interface AuthService {
 
-    User register(String username, String password, String nickname, String role);
+    User register(String username, String password, String nickname);
 
     User login(String username, String password);
 
