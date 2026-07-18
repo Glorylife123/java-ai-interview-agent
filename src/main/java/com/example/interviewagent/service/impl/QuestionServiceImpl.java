@@ -3,6 +3,7 @@ package com.example.interviewagent.service.impl;
 import com.example.interviewagent.common.PageResult;
 import com.example.interviewagent.controller.dto.QuestionResponse;
 import com.example.interviewagent.controller.dto.QuestionUpsertRequest;
+import com.example.interviewagent.controller.dto.HotQuestionResponse;
 import com.example.interviewagent.domain.QuestionType;
 import com.example.interviewagent.entity.Question;
 import com.example.interviewagent.entity.Tag;
@@ -10,7 +11,11 @@ import com.example.interviewagent.exception.BusinessException;
 import com.example.interviewagent.mapper.QuestionMapper;
 import com.example.interviewagent.mapper.QuestionTagMapper;
 import com.example.interviewagent.mapper.TagMapper;
+import com.example.interviewagent.redis.QuestionCacheLookup;
+import com.example.interviewagent.redis.QuestionRankEntry;
+import com.example.interviewagent.redis.QuestionRedisService;
 import com.example.interviewagent.service.QuestionService;
+import com.example.interviewagent.service.dto.QuestionCounters;
 import com.example.interviewagent.service.dto.QuestionTagRelation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,6 +37,7 @@ public class QuestionServiceImpl implements QuestionService {
     private final QuestionMapper questionMapper;
     private final TagMapper tagMapper;
     private final QuestionTagMapper questionTagMapper;
+    private final QuestionRedisService questionRedisService;
 
     @Override
     @Transactional
@@ -46,7 +52,9 @@ public class QuestionServiceImpl implements QuestionService {
         if (request.getTagIds() != null) {
             replaceTags(question.getId(), request.getTagIds());
         }
-        return toResponse(questionMapper.selectById(question.getId()));
+        QuestionResponse response = toResponse(questionMapper.selectById(question.getId()));
+        questionRedisService.evictDetail(question.getId());
+        return response;
     }
 
     @Override
@@ -60,10 +68,56 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     public QuestionResponse viewDetail(Long id) {
-        if (questionMapper.increaseViewCount(id) == 0) {
+        QuestionCacheLookup lookup = questionRedisService.findDetail(id);
+        if (lookup.hit() && lookup.value() == null) {
             throw new BusinessException(404, "题目不存在");
         }
-        return toResponse(getById(id));
+
+        QuestionResponse response = lookup.hit() ? lookup.value() : loadDetailForCache(id);
+        if (questionMapper.increaseViewCount(id) == 0) {
+            questionRedisService.evictDetail(id);
+            throw new BusinessException(404, "题目不存在");
+        }
+
+        QuestionCounters counters = questionMapper.selectCountersById(id);
+        if (counters == null) {
+            questionRedisService.evictDetail(id);
+            throw new BusinessException(404, "题目不存在");
+        }
+        applyCounters(response, counters);
+        if (!lookup.hit()) {
+            questionRedisService.putDetail(id, response);
+        }
+        questionRedisService.incrementViewRank(id);
+        return response;
+    }
+
+    @Override
+    public List<HotQuestionResponse> listHot(Integer limit) {
+        int safeLimit = limit == null || limit < 1 ? 10 : Math.min(limit, 50);
+        List<QuestionRankEntry> ranks = questionRedisService.topViewed(safeLimit);
+        if (ranks.isEmpty()) {
+            return List.of();
+        }
+        List<HotQuestionResponse> result = new ArrayList<>(ranks.size());
+        for (QuestionRankEntry rank : ranks) {
+            QuestionCacheLookup lookup = questionRedisService.findDetail(rank.questionId());
+            if (lookup.hit() && lookup.value() == null) {
+                continue;
+            }
+            try {
+                QuestionResponse detail = lookup.hit() ? lookup.value() : loadDetailForCache(rank.questionId());
+                if (!lookup.hit()) {
+                    questionRedisService.putDetail(rank.questionId(), detail);
+                }
+                result.add(new HotQuestionResponse(rank.questionId(), detail.getTitle(), rank.score()));
+            } catch (BusinessException e) {
+                if (e.getCode() != 404) {
+                    throw e;
+                }
+            }
+        }
+        return result;
     }
 
     @Override
@@ -119,7 +173,9 @@ public class QuestionServiceImpl implements QuestionService {
         if (request.getTagIds() != null) {
             replaceTags(id, request.getTagIds());
         }
-        return toResponse(getById(id));
+        QuestionResponse response = toResponse(getById(id));
+        questionRedisService.evictDetail(id);
+        return response;
     }
 
     @Override
@@ -127,6 +183,8 @@ public class QuestionServiceImpl implements QuestionService {
         if (questionMapper.logicDeleteById(id) == 0) {
             throw new BusinessException(404, "题目不存在");
         }
+        questionRedisService.evictDetail(id);
+        questionRedisService.removeFromViewRank(id);
     }
 
     @Override
@@ -136,6 +194,7 @@ public class QuestionServiceImpl implements QuestionService {
             throw new BusinessException(404, "标签不存在");
         }
         questionTagMapper.insertIgnore(questionId, tagId);
+        questionRedisService.evictDetail(questionId);
     }
 
     @Override
@@ -147,6 +206,22 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     public void increaseSubmitCount(Long questionId, Integer isCorrect) {
         questionMapper.increaseSubmitCount(questionId, isCorrect);
+        questionRedisService.evictDetail(questionId);
+    }
+
+    private QuestionResponse loadDetailForCache(Long id) {
+        Question question = questionMapper.selectById(id);
+        if (question == null) {
+            questionRedisService.putNotFound(id);
+            throw new BusinessException(404, "题目不存在");
+        }
+        return toResponse(question);
+    }
+
+    private void applyCounters(QuestionResponse response, QuestionCounters counters) {
+        response.setViewCount(counters.getViewCount());
+        response.setSubmitCount(counters.getSubmitCount());
+        response.setCorrectCount(counters.getCorrectCount());
     }
 
     /** 整体替换一题的标签：先校验全部 tagId，再删除旧关联，避免非法标签导致旧关联被误清空。 */

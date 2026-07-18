@@ -12,6 +12,13 @@
           AND deleted = 0
     </select>
 
+    <select id="selectCountersById" resultType="com.example.interviewagent.service.dto.QuestionCounters">
+        SELECT view_count, submit_count, correct_count
+        FROM question
+        WHERE id = #{id}
+          AND deleted = 0
+    </select>
+
     <!-- 面试出题：随机取一道未出过、（可选）指定难度的上架题目。 -->
     <select id="selectRandomForInterview" resultType="com.example.interviewagent.entity.Question">
         SELECT *

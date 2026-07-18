@@ -3,6 +3,7 @@ package com.example.interviewagent.service.impl;
 import com.example.interviewagent.entity.Tag;
 import com.example.interviewagent.exception.BusinessException;
 import com.example.interviewagent.mapper.TagMapper;
+import com.example.interviewagent.redis.QuestionRedisService;
 import com.example.interviewagent.service.TagService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import java.util.List;
 public class TagServiceImpl implements TagService {
 
     private final TagMapper tagMapper;
+    private final QuestionRedisService questionRedisService;
 
     @Override
     public Tag create(Tag tag) {
@@ -46,7 +48,9 @@ public class TagServiceImpl implements TagService {
         if (rows == 0) {
             throw new BusinessException(404, "标签不存在或未修改");
         }
-        return getById(id);
+        Tag updated = getById(id);
+        questionRedisService.evictAllDetails();
+        return updated;
     }
 
     @Override
@@ -54,5 +58,6 @@ public class TagServiceImpl implements TagService {
         if (tagMapper.logicDeleteById(id) == 0) {
             throw new BusinessException(404, "标签不存在");
         }
+        questionRedisService.evictAllDetails();
     }
 }

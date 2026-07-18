@@ -42,6 +42,7 @@
 | Spring MVC | Spring Boot 管理 | REST API 与 MVC 拦截器 |
 | MyBatis | 3.0.5 | 数据访问与 XML SQL 映射 |
 | MySQL | 8.x 推荐 | 业务数据与 Refresh Token 持久化 |
+| Redis | 7.x+ | 题目详情缓存、登录失败限流与热门题目排行 |
 | JJWT | 0.12.6 | Access Token、Refresh Token 签发与解析 |
 | Spring Security Crypto | Spring Boot 管理 | BCrypt 密码加密，不使用完整 Security Filter Chain |
 | Lombok | Spring Boot 管理 | 减少实体与 DTO 样板代码 |
@@ -95,7 +96,13 @@
 - 浏览次数、提交次数、正确次数统计
 - 题目新增或编辑时整体维护标签集合
 - 批量加载题目标签，避免逐题查询产生 N+1 问题
+- Cache Aside 缓存题目详情，动态计数仍从 MySQL 实时读取
+- 不存在的题目使用短 TTL 空值缓存，正常缓存使用随机 TTL 抖动
+- 题目或标签更新后主动删除相关缓存
+- 使用 Redis ZSet 累计题目访问热度并提供热门题目接口
 - 兼容已确认语义的历史题型值
+
+登录接口按“用户名 + 客户端 IP”记录失败次数。Redis Lua 脚本原子执行 `INCR + PEXPIRE`，默认 5 分钟内失败 5 次后返回 HTTP 429；登录成功会清除计数。
 
 ### 4. 标签管理
 
@@ -187,6 +194,7 @@ flowchart LR
     Interceptor --> Service[Service 业务层]
     Service --> Mapper[MyBatis Mapper]
     Service --> TokenStore[RefreshTokenStore]
+    Service --> Redis[(Redis)]
     TokenStore --> Mapper
     Mapper --> MySQL[(MySQL)]
 ```
@@ -202,6 +210,7 @@ src/main/java/com/example/interviewagent
 ├─ entity       # 数据库实体
 ├─ exception    # 业务异常与全局异常处理
 ├─ mapper       # MyBatis Mapper 接口
+├─ redis        # 题目缓存/排行与登录限流
 ├─ security     # JWT、Cookie、认证与管理员拦截器
 ├─ service      # 业务接口与实现
 ├─ interview    # 模拟面试策略包（出题/评分/报告接口与规则实现、流程编排器）
@@ -212,6 +221,7 @@ src/main/java/com/example/interviewagent
 
 ```text
 Controller → Service / ServiceImpl → Mapper / Store → MySQL
+Controller → Service / Redis Service → Redis
 Controller(Interview) → InterviewOrchestrator → 出题/评分/报告策略 → Mapper → MySQL
 ```
 
@@ -470,6 +480,7 @@ X-Device-Id: browser-or-device-id
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/api/questions` | 已登录 | 分页和组合筛选题目 |
+| GET | `/api/questions/hot?limit=10` | 已登录 | 查询 Redis 访问热度前 N 的题目（最大 50） |
 | GET | `/api/questions/{id}` | 已登录 | 查看题目详情并增加浏览次数 |
 | POST | `/api/questions` | 管理员 | 创建题目 |
 | PUT | `/api/questions/{id}` | 管理员 | 更新题目和标签集合 |
@@ -557,6 +568,7 @@ keyword、difficulty、questionType、tagId、pageNum、pageSize
 
 - JDK 17
 - MySQL 8.x
+- Redis 7.x 或更高版本
 - Node.js 与 npm，建议使用能够运行 Vite 5 的活跃 LTS 版本
 - Git
 
@@ -587,6 +599,19 @@ CREATE DATABASE interview_agent
 
 当前项目尚未提供完整初始化 DDL，需要确保业务表已经按[数据库设计](#数据库设计)创建。`docs/migrations/` 中的脚本用于已有数据迁移和清理，不等同于完整初始化脚本。
 
+启动本地 Redis（Homebrew 安装方式）：
+
+```bash
+brew services start redis
+redis-cli ping
+```
+
+返回 `PONG` 表示 Redis 可用。也可以使用 Docker：
+
+```bash
+docker run -d --name interview-redis -p 6379:6379 redis:7-alpine
+```
+
 ### 4. 配置环境变量
 
 后端默认启用 `dev` Profile，默认连接：
@@ -601,6 +626,10 @@ jdbc:mysql://localhost:3306/interview_agent
 | --- | --- | --- |
 | `DB_USERNAME` | `root` | 数据库用户名 |
 | `DB_PASSWORD` | `root` | 数据库密码 |
+| `REDIS_HOST` | `localhost` | Redis 地址 |
+| `REDIS_PORT` | `6379` | Redis 端口 |
+| `REDIS_PASSWORD` | 空 | Redis 密码 |
+| `REDIS_DATABASE` | `0` | Redis logical database |
 | `APP_JWT_SECRET` | 仅开发环境提供回退值 | HS256 密钥，生产环境必须设置且不少于 32 字节 |
 | `SPRING_PROFILES_ACTIVE` | `dev` | Spring Profile，生产使用 `prod` |
 
@@ -609,6 +638,8 @@ Git Bash / Linux / macOS 示例：
 ```bash
 export DB_USERNAME=root
 export DB_PASSWORD='your-database-password'
+export REDIS_HOST=localhost
+export REDIS_PORT=6379
 export APP_JWT_SECRET='replace-with-at-least-32-bytes-secret'
 ```
 
@@ -617,6 +648,8 @@ Windows PowerShell 示例：
 ```powershell
 $env:DB_USERNAME = "root"
 $env:DB_PASSWORD = "your-database-password"
+$env:REDIS_HOST = "localhost"
+$env:REDIS_PORT = "6379"
 $env:APP_JWT_SECRET = "replace-with-at-least-32-bytes-secret"
 ```
 
@@ -685,6 +718,8 @@ npm run build
 export SPRING_PROFILES_ACTIVE=prod
 export DB_USERNAME=your_db_user
 export DB_PASSWORD=your_db_password
+export REDIS_HOST=your_redis_host
+export REDIS_PASSWORD=your_redis_password
 export APP_JWT_SECRET='your-secret-at-least-32-bytes-long'
 ```
 
@@ -723,11 +758,19 @@ export APP_JWT_SECRET='your-secret-at-least-32-bytes-long'
 
 题目支持关键词、难度、题型和标签组合筛选。分页结果统一批量查询标签，避免每道题单独访问数据库造成 N+1 查询。
 
-### 5. 规范题型与历史数据兼容
+### 5. Redis 缓存、限流与实时排行
+
+- 使用 Cache Aside 缓存题目正文和标签，缓存命中时只查询高频变化的浏览/提交/正确计数
+- 使用短 TTL 空值缓存防止不存在题目反复回源，使用随机 TTL 抖动降低集中失效风险
+- 题目写操作按 ID 失效缓存；标签更新通过 `SCAN` 分批清理受影响的题目详情缓存
+- 登录失败计数通过 Lua 原子设置计数和过期时间，Redis 异常时降级放行，不影响基础登录可用性
+- 使用 ZSet 的 `ZINCRBY` 和倒序查询维护热门题目榜；热度表示 Redis 接入后的访问次数
+
+### 6. 规范题型与历史数据兼容
 
 公开 API 和数据库规范值统一使用中文题型，同时兼容已确认语义的历史别名。未知旧值不会被自动错误归类，并提供数据迁移脚本协助整理历史数据。
 
-### 6. 前端统一会话管理
+### 7. 前端统一会话管理
 
 Axios 自动添加 Access Token、刷新过期令牌、排队重放并发请求，并在刷新失败时统一清理状态和跳转登录页，减少业务页面重复处理认证逻辑。
 

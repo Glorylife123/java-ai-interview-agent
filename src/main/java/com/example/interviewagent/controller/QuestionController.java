@@ -4,6 +4,7 @@ import com.example.interviewagent.common.PageResult;
 import com.example.interviewagent.common.Result;
 import com.example.interviewagent.controller.dto.QuestionResponse;
 import com.example.interviewagent.controller.dto.QuestionUpsertRequest;
+import com.example.interviewagent.controller.dto.HotQuestionResponse;
 import com.example.interviewagent.entity.Tag;
 import com.example.interviewagent.service.QuestionService;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,12 @@ public class QuestionController {
                                                      @RequestParam(required = false) Integer pageNum,
                                                      @RequestParam(required = false) Integer pageSize) {
         return Result.success(questionService.page(keyword, difficulty, questionType, tagId, pageNum, pageSize));
+    }
+
+    @GetMapping("/hot")
+    public Result<List<HotQuestionResponse>> hot(
+            @RequestParam(required = false, defaultValue = "10") Integer limit) {
+        return Result.success(questionService.listHot(limit));
     }
 
     @PutMapping("/{id}")
