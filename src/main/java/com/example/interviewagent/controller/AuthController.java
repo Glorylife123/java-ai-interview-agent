@@ -3,10 +3,13 @@ package com.example.interviewagent.controller;
 import com.example.interviewagent.common.Result;
 import com.example.interviewagent.controller.dto.LoginResponse;
 import com.example.interviewagent.entity.User;
+import com.example.interviewagent.exception.BusinessException;
+import com.example.interviewagent.redis.LoginAttemptService;
 import com.example.interviewagent.security.RefreshTokenCookieFactory;
 import com.example.interviewagent.service.AuthService;
 import com.example.interviewagent.service.TokenService;
 import com.example.interviewagent.service.dto.IssuedTokens;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,7 @@ public class AuthController {
     private final AuthService authService;
     private final TokenService tokenService;
     private final RefreshTokenCookieFactory cookieFactory;
+    private final LoginAttemptService loginAttemptService;
 
     @PostMapping("/register")
     public Result<User> register(@RequestBody RegisterRequest request) {
@@ -39,12 +43,25 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public Result<LoginResponse> login(@RequestBody LoginRequest request,
+    public Result<LoginResponse> login(@RequestBody LoginRequest loginRequest,
                                        @RequestHeader(value = "X-Device-Id", required = false, defaultValue = "default")
                                        String deviceId,
+                                       HttpServletRequest servletRequest,
                                        HttpServletResponse response) {
+        String clientIp = servletRequest.getRemoteAddr();
+        loginAttemptService.ensureAllowed(loginRequest.getUsername(), clientIp);
+
         // 1. 校验用户名密码（BCrypt），成功返回不含密码哈希的用户
-        User user = authService.login(request.getUsername(), request.getPassword());
+        User user;
+        try {
+            user = authService.login(loginRequest.getUsername(), loginRequest.getPassword());
+        } catch (BusinessException e) {
+            if (e.getCode() == 401) {
+                loginAttemptService.recordFailure(loginRequest.getUsername(), clientIp);
+            }
+            throw e;
+        }
+        loginAttemptService.clearFailures(loginRequest.getUsername(), clientIp);
 
         // 2. 登录成功：同时签发 AT 与 RT，并将 RT 落库
         IssuedTokens tokens = tokenService.issueTokens(user, deviceId);

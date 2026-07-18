@@ -1,6 +1,7 @@
 package com.example.interviewagent.mapper;
 
 import com.example.interviewagent.entity.Question;
+import com.example.interviewagent.service.dto.QuestionCounters;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,6 +11,8 @@ import java.util.List;
 public interface QuestionMapper {
 
     Question selectById(@Param("id") Long id);
+
+    QuestionCounters selectCountersById(@Param("id") Long id);
 
     /**
      * 面试出题：随机取一道未出过、且（可选）指定难度的上架题目。

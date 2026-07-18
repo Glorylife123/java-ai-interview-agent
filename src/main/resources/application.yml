@@ -3,6 +3,14 @@ spring:
     name: java-ai-interview-agent
   profiles:
     active: dev
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      connect-timeout: 1s
+      timeout: 1s
 
 server:
   port: 8080
@@ -12,6 +20,12 @@ mybatis:
 
 # 双令牌（JWT）相关配置
 app:
+  redis:
+    question-detail-ttl: 15m
+    question-null-ttl: 1m
+    question-ttl-jitter: 5m
+    login-failure-window: 5m
+    login-max-failures: 5
   jwt:
     # HS256 密钥，长度必须 >= 32 字节（256 位）。
     # 优先读环境变量 APP_JWT_SECRET；冒号后为本地开发回退值（仅供 dev，切勿用于生产）。

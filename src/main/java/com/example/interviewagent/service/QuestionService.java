@@ -3,6 +3,7 @@ package com.example.interviewagent.service;
 import com.example.interviewagent.common.PageResult;
 import com.example.interviewagent.controller.dto.QuestionResponse;
 import com.example.interviewagent.controller.dto.QuestionUpsertRequest;
+import com.example.interviewagent.controller.dto.HotQuestionResponse;
 import com.example.interviewagent.entity.Question;
 import com.example.interviewagent.entity.Tag;
 
@@ -16,6 +17,8 @@ public interface QuestionService {
     Question getById(Long id);
 
     QuestionResponse viewDetail(Long id);
+
+    List<HotQuestionResponse> listHot(Integer limit);
 
     PageResult<QuestionResponse> page(String keyword, Integer difficulty, String questionType,
                                       Long tagId, Integer pageNum, Integer pageSize);
