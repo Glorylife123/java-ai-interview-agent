@@ -1,0 +1,37 @@
+[
+  {
+    "Name": "OpenAPI JSON",
+    "Status": 200,
+    "Ms": 1562.75
+  },
+  {
+    "Name": "Knife4j doc.html",
+    "Status": 200,
+    "Ms": 82.95
+  },
+  {
+    "Name": "Question page size=20",
+    "Status": 200,
+    "Ms": 37.23
+  },
+  {
+    "Name": "Question keyword Redis",
+    "Status": 200,
+    "Ms": 24.23
+  },
+  {
+    "Name": "Question type 八股题",
+    "Status": 200,
+    "Ms": 62.06
+  },
+  {
+    "Name": "Hot questions",
+    "Status": 200,
+    "Ms": 14.74
+  },
+  {
+    "Name": "Practice overview",
+    "Status": 200,
+    "Ms": 13.03
+  }
+]

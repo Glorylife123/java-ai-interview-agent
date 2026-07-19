@@ -739,6 +739,8 @@ export APP_JWT_SECRET='your-secret-at-least-32-bytes-long'
 | Redis 命中、过期、更新失效验证手册 | `docs/demo/redis-validation-guide.md` |
 | Redis 缓存前后耗时、命中率、限流和锁效果压测脚本 | `docs/demo/scripts/redis-demo-benchmark.ps1` |
 | 简历/面试指标报告模板 | `docs/demo/results/redis-demo-metrics-template.md` |
+| 后端实测报告 | `docs/demo/results/backend-measurement-report.md` |
+| 后端收尾完整文档 | `docs/demo/backend-wrapup-complete.md` |
 
 本地后端启动后，可运行：
 

@@ -18,8 +18,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Invoke-Redis {
-    param([string[]]$Args)
-    & $RedisCli -h $RedisHost -p $RedisPort -a $RedisPassword @Args 2>$null
+    param([string[]]$RedisArgs)
+    $out = & $RedisCli --no-auth-warning -h $RedisHost -p $RedisPort -a $RedisPassword @RedisArgs 2>$null
+    return ($out -join "`n").Trim()
 }
 
 function Invoke-MeasuredRequest {
@@ -90,7 +91,7 @@ if (-not (Test-Path $RedisCli)) {
     throw "redis-cli not found: $RedisCli"
 }
 
-$ping = Invoke-Redis @("PING")
+$ping = Invoke-Redis -RedisArgs @("PING")
 if ($ping -notmatch "PONG") {
     throw "Redis PING failed. Check RedisHost/RedisPort/RedisPassword. Output: $ping"
 }
@@ -115,55 +116,55 @@ $hotListKey = "question:hot:list"
 $statKey = "user:practice:stat:$userId"
 $submitLockKey = "answer:submit:lock:${userId}:$QuestionId"
 
-Invoke-Redis @("DEL", $detailKey, $hotListKey, $statKey, $submitLockKey) | Out-Null
+Invoke-Redis -RedisArgs @("DEL", $detailKey, $hotListKey, $statKey, $submitLockKey) | Out-Null
 
 $noCacheTimes = @()
 for ($i = 0; $i -lt $Loops; $i++) {
-    Invoke-Redis @("DEL", $detailKey) | Out-Null
+    Invoke-Redis -RedisArgs @("DEL", $detailKey) | Out-Null
     $r = Invoke-MeasuredRequest -Method "GET" -Path "/api/questions/$QuestionId" -Token $token
     $noCacheTimes += $r.Ms
 }
 
-Invoke-Redis @("DEL", $detailKey) | Out-Null
+Invoke-Redis -RedisArgs @("DEL", $detailKey) | Out-Null
 $warm = Invoke-MeasuredRequest -Method "GET" -Path "/api/questions/$QuestionId" -Token $token
-$detailTtlAfterWarm = Invoke-Redis @("TTL", $detailKey)
+$detailTtlAfterWarm = Invoke-Redis -RedisArgs @("TTL", $detailKey)
 $cacheTimes = @()
 for ($i = 0; $i -lt $Loops; $i++) {
     $r = Invoke-MeasuredRequest -Method "GET" -Path "/api/questions/$QuestionId" -Token $token
     $cacheTimes += $r.Ms
 }
 
-Invoke-Redis @("EXPIRE", $detailKey, "2") | Out-Null
+Invoke-Redis -RedisArgs @("EXPIRE", $detailKey, "2") | Out-Null
 Start-Sleep -Seconds 3
-$detailExistsAfterExpire = Invoke-Redis @("EXISTS", $detailKey)
+$detailExistsAfterExpire = Invoke-Redis -RedisArgs @("EXISTS", $detailKey)
 $afterExpire = Invoke-MeasuredRequest -Method "GET" -Path "/api/questions/$QuestionId" -Token $token
-$detailExistsAfterReload = Invoke-Redis @("EXISTS", $detailKey)
+$detailExistsAfterReload = Invoke-Redis -RedisArgs @("EXISTS", $detailKey)
 
-Invoke-Redis @("DEL", $hotListKey) | Out-Null
+Invoke-Redis -RedisArgs @("DEL", $hotListKey) | Out-Null
 # Ensure the rank has at least one member for this question.
 Invoke-MeasuredRequest -Method "GET" -Path "/api/questions/$QuestionId" -Token $token | Out-Null
 $hotHits = 0
 $hotMisses = 0
 $hotTimes = @()
 for ($i = 0; $i -lt $Loops; $i++) {
-    $existsBefore = [int](Invoke-Redis @("EXISTS", $hotListKey))
+    $existsBefore = [int](Invoke-Redis -RedisArgs @("EXISTS", $hotListKey))
     if ($existsBefore -eq 1) { $hotHits++ } else { $hotMisses++ }
     $r = Invoke-MeasuredRequest -Method "GET" -Path "/api/questions/hot?limit=10" -Token $token
     $hotTimes += $r.Ms
 }
 $hotHitRate = if (($hotHits + $hotMisses) -eq 0) { 0 } else { [math]::Round(($hotHits * 100.0) / ($hotHits + $hotMisses), 2) }
-$hotTtl = Invoke-Redis @("TTL", $hotListKey)
+$hotTtl = Invoke-Redis -RedisArgs @("TTL", $hotListKey)
 
-$statBefore = Invoke-Redis @("EXISTS", $statKey)
+$statBefore = Invoke-Redis -RedisArgs @("EXISTS", $statKey)
 $stat1 = Invoke-MeasuredRequest -Method "GET" -Path "/api/stat/overview" -Token $token
-$statTtl = Invoke-Redis @("TTL", $statKey)
+$statTtl = Invoke-Redis -RedisArgs @("TTL", $statKey)
 $stat2 = Invoke-MeasuredRequest -Method "GET" -Path "/api/stat/overview" -Token $token
 
 $answerBody = @{ questionId = $QuestionId; userAnswer = "Redis demo answer"; timeCostSeconds = 3 }
-Invoke-Redis @("DEL", $submitLockKey, $statKey) | Out-Null
+Invoke-Redis -RedisArgs @("DEL", $submitLockKey, $statKey) | Out-Null
 $submit1 = Invoke-MeasuredRequest -Method "POST" -Path "/api/answer/submit" -Token $token -Body $answerBody
-$submitLockTtl = Invoke-Redis @("TTL", $submitLockKey)
-$statAfterSubmit = Invoke-Redis @("EXISTS", $statKey)
+$submitLockTtl = Invoke-Redis -RedisArgs @("TTL", $submitLockKey)
+$statAfterSubmit = Invoke-Redis -RedisArgs @("EXISTS", $statKey)
 $submit2 = Invoke-MeasuredRequest -Method "POST" -Path "/api/answer/submit" -Token $token -Body $answerBody
 
 $limitStatuses = @()
@@ -173,8 +174,8 @@ for ($i = 0; $i -lt 6; $i++) {
 }
 $limitKey127 = "interview:login:fail:" + (Sha256Hex ($LimitUsername.ToLower() + [char]0 + "127.0.0.1"))
 $limitKeyV6 = "interview:login:fail:" + (Sha256Hex ($LimitUsername.ToLower() + [char]0 + "0:0:0:0:0:0:0:1"))
-$limitTtl127 = Invoke-Redis @("TTL", $limitKey127)
-$limitTtlV6 = Invoke-Redis @("TTL", $limitKeyV6)
+$limitTtl127 = Invoke-Redis -RedisArgs @("TTL", $limitKey127)
+$limitTtlV6 = Invoke-Redis -RedisArgs @("TTL", $limitKeyV6)
 
 $updateInvalidationLine = "Not run. Pass -RunUpdateInvalidation -AdminUsername <admin> -AdminPassword <password> to verify PUT invalidates question:detail:{id}."
 if ($RunUpdateInvalidation) {
@@ -187,23 +188,12 @@ if ($RunUpdateInvalidation) {
     }
     $adminToken = $adminLogin.Json.data.access_token
     $detail = Invoke-MeasuredRequest -Method "GET" -Path "/api/questions/$QuestionId" -Token $token
-    Invoke-Redis @("DEL", $detailKey) | Out-Null
+    Invoke-Redis -RedisArgs @("DEL", $detailKey) | Out-Null
     Invoke-MeasuredRequest -Method "GET" -Path "/api/questions/$QuestionId" -Token $token | Out-Null
-    $existsBeforeUpdate = Invoke-Redis @("EXISTS", $detailKey)
-    $q = $detail.Json.data
-    $updateBody = @{
-        title = $q.title
-        content = $q.content
-        questionType = $q.questionType
-        difficulty = $q.difficulty
-        answer = $q.answer
-        answerAnalysis = $q.answerAnalysis
-        source = $q.source
-        status = $q.status
-        tagIds = $null
-    }
+    $existsBeforeUpdate = Invoke-Redis -RedisArgs @("EXISTS", $detailKey)
+    $updateBody = @{}
     $update = Invoke-MeasuredRequest -Method "PUT" -Path "/api/questions/$QuestionId" -Token $adminToken -Body $updateBody
-    $existsAfterUpdate = Invoke-Redis @("EXISTS", $detailKey)
+    $existsAfterUpdate = Invoke-Redis -RedisArgs @("EXISTS", $detailKey)
     $updateInvalidationLine = "PUT status=$($update.Status), detail key before update=$existsBeforeUpdate, after update=$existsAfterUpdate."
 }
 
@@ -215,9 +205,9 @@ $report = @"
 # Redis Demo Metrics
 
 Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-BaseUrl: `$BaseUrl`
-QuestionId: `$QuestionId`
-Loops: `$Loops`
+BaseUrl: $BaseUrl
+QuestionId: $QuestionId
+Loops: $Loops
 
 ## Interview-ready Numbers
 
@@ -239,16 +229,16 @@ Loops: `$Loops`
 
 | Key | Evidence |
 | --- | --- |
-| `$detailKey` | TTL after warm=${detailTtlAfterWarm}s; exists after forced 2s expiry=${detailExistsAfterExpire}; exists after reload=${detailExistsAfterReload}; reload status=$($afterExpire.Status) |
-| `$hotListKey` | TTL after hot query=${hotTtl}s |
-| `$statKey` | exists before stat=${statBefore}; TTL after stat=${statTtl}s; status1=$($stat1.Status); status2=$($stat2.Status); exists after answer submit=${statAfterSubmit} |
-| `$submitLockKey` | TTL after first submit=${submitLockTtl}s |
+| $detailKey | TTL after warm=${detailTtlAfterWarm}s; exists after forced 2s expiry=${detailExistsAfterExpire}; exists after reload=${detailExistsAfterReload}; reload status=$($afterExpire.Status) |
+| $hotListKey | TTL after hot query=${hotTtl}s |
+| $statKey | exists before stat=${statBefore}; TTL after stat=${statTtl}s; status1=$($stat1.Status); status2=$($stat2.Status); exists after answer submit=${statAfterSubmit} |
+| $submitLockKey | TTL after first submit=${submitLockTtl}s |
 | login failure key | TTL 127.0.0.1=${limitTtl127}s; TTL IPv6 loopback=${limitTtlV6}s |
 | update invalidation | ${updateInvalidationLine} |
 
 ## Notes
 
-- Detail cache hit still updates `view_count` and reads dynamic counters from MySQL, so the optimized path is not zero-SQL by design.
+- Detail cache hit still updates view_count and reads dynamic counters from MySQL, so the optimized path is not zero-SQL by design.
 - Hot list hit rate is measured by checking whether `question:hot:list` existed immediately before each `/api/questions/hot` request.
 - For stable resume numbers, run this script after JVM warm-up and with a fixed local MySQL/Redis environment.
 "@
