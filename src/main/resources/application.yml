@@ -24,6 +24,9 @@ app:
     question-detail-ttl: 15m
     question-null-ttl: 1m
     question-ttl-jitter: 5m
+    hot-question-ttl: 5m
+    practice-stat-ttl: 5m
+    answer-submit-lock-ttl: 10s
     login-failure-window: 5m
     login-max-failures: 5
   jwt:

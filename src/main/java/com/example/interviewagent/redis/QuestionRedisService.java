@@ -1,8 +1,10 @@
 package com.example.interviewagent.redis;
 
 import com.example.interviewagent.config.RedisFeatureProperties;
+import com.example.interviewagent.controller.dto.HotQuestionResponse;
 import com.example.interviewagent.controller.dto.QuestionResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -23,9 +26,12 @@ import java.util.concurrent.ThreadLocalRandom;
 @RequiredArgsConstructor
 public class QuestionRedisService {
 
-    private static final String DETAIL_PREFIX = "interview:question:detail:";
-    private static final String VIEW_RANK_KEY = "interview:rank:question:view";
+    private static final String DETAIL_PREFIX = "question:detail:";
+    private static final String HOT_LIST_KEY = "question:hot:list";
+    private static final String VIEW_RANK_KEY = "question:hot:rank";
     private static final String NULL_MARKER = "__NULL__";
+    private static final TypeReference<List<HotQuestionResponse>> HOT_LIST_TYPE = new TypeReference<>() {
+    };
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
@@ -102,6 +108,43 @@ public class QuestionRedisService {
         }
     }
 
+    public Optional<List<HotQuestionResponse>> findHotList(int limit) {
+        try {
+            String value = redisTemplate.opsForValue().get(HOT_LIST_KEY);
+            if (value == null) {
+                return Optional.empty();
+            }
+            List<HotQuestionResponse> list = objectMapper.readValue(value, HOT_LIST_TYPE);
+            return Optional.of(limitList(list, limit));
+        } catch (JsonProcessingException e) {
+            log.warn("热门题目缓存反序列化失败，删除损坏缓存。key={}", HOT_LIST_KEY);
+            evictHotList();
+            return Optional.empty();
+        } catch (RuntimeException e) {
+            logRedisFallback("读取热门题目缓存", e);
+            return Optional.empty();
+        }
+    }
+
+    public void putHotList(List<HotQuestionResponse> questions) {
+        try {
+            String value = objectMapper.writeValueAsString(questions == null ? List.of() : questions);
+            redisTemplate.opsForValue().set(HOT_LIST_KEY, value, properties.getHotQuestionTtl());
+        } catch (JsonProcessingException e) {
+            log.warn("热门题目列表序列化失败，本次跳过缓存");
+        } catch (RuntimeException e) {
+            logRedisFallback("写入热门题目缓存", e);
+        }
+    }
+
+    public void evictHotList() {
+        try {
+            redisTemplate.delete(HOT_LIST_KEY);
+        } catch (RuntimeException e) {
+            logRedisFallback("删除热门题目缓存", e);
+        }
+    }
+
     public void incrementViewRank(Long questionId) {
         try {
             redisTemplate.opsForZSet().incrementScore(VIEW_RANK_KEY, questionId.toString(), 1D);
@@ -113,6 +156,7 @@ public class QuestionRedisService {
     public void removeFromViewRank(Long questionId) {
         try {
             redisTemplate.opsForZSet().remove(VIEW_RANK_KEY, questionId.toString());
+            evictHotList();
         } catch (RuntimeException e) {
             logRedisFallback("删除题目排行项", e);
         }
@@ -140,6 +184,14 @@ public class QuestionRedisService {
             logRedisFallback("读取题目排行榜", e);
             return List.of();
         }
+    }
+
+    private List<HotQuestionResponse> limitList(List<HotQuestionResponse> list, int limit) {
+        if (list == null || list.isEmpty()) {
+            return List.of();
+        }
+        int safeLimit = Math.max(0, Math.min(limit, list.size()));
+        return List.copyOf(list.subList(0, safeLimit));
     }
 
     private Duration detailTtlWithJitter() {

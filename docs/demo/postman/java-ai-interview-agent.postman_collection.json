@@ -1,0 +1,121 @@
+{
+  "info": {
+    "name": "Java AI Interview Agent Backend Demo",
+    "description": "Backend demo collection for auth, question cache, hot questions, practice stats, duplicate submit lock, and login failure rate limit.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "username", "value": "demo_user" },
+    { "key": "password", "value": "123456" },
+    { "key": "limitUsername", "value": "redis_limit_demo" },
+    { "key": "questionId", "value": "1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "userId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 OpenAPI JSON",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/v3/api-docs", "host": ["{{baseUrl}}"], "path": ["v3", "api-docs"] }
+      }
+    },
+    {
+      "name": "01 Register Demo User",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"nickname\": \"Demo User\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('register returns 0 or username exists', function () {", "  pm.expect([200,400]).to.include(pm.response.code);", "});"] } }]
+    },
+    {
+      "name": "02 Login Demo User",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-Device-Id", "value": "postman-demo" }],
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('login success', function () { pm.response.to.have.status(200); });", "const json = pm.response.json();", "pm.environment.set('accessToken', json.data.access_token);", "pm.environment.set('userId', json.data.user.id);"] } }]
+    },
+    {
+      "name": "03 Question Page - Pick QuestionId",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/questions?pageNum=1&pageSize=10", "host": ["{{baseUrl}}"], "path": ["api", "questions"], "query": [{ "key": "pageNum", "value": "1" }, { "key": "pageSize", "value": "10" }] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('question page success', function () { pm.response.to.have.status(200); });", "const records = pm.response.json().data.records || [];", "if (records.length > 0) pm.environment.set('questionId', records[0].id);"] } }]
+    },
+    {
+      "name": "04 Question Detail - Cache Warm/Miss",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/questions/{{questionId}}", "host": ["{{baseUrl}}"], "path": ["api", "questions", "{{questionId}}"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('question detail success', function () { pm.response.to.have.status(200); });"] } }]
+    },
+    {
+      "name": "05 Question Detail - Cache Hit",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/questions/{{questionId}}", "host": ["{{baseUrl}}"], "path": ["api", "questions", "{{questionId}}"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('question detail cache-hit request success', function () { pm.response.to.have.status(200); });"] } }]
+    },
+    {
+      "name": "06 Hot Questions - question:hot:list",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/questions/hot?limit=10", "host": ["{{baseUrl}}"], "path": ["api", "questions", "hot"], "query": [{ "key": "limit", "value": "10" }] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('hot questions success', function () { pm.response.to.have.status(200); });"] } }]
+    },
+    {
+      "name": "07 Practice Stat Overview - user:practice:stat",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/stat/overview", "host": ["{{baseUrl}}"], "path": ["api", "stat", "overview"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('stat overview success', function () { pm.response.to.have.status(200); });"] } }]
+    },
+    {
+      "name": "08 Submit Answer Once - creates lock and evicts stat",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "body": { "mode": "raw", "raw": "{\n  \"questionId\": {{questionId}},\n  \"userAnswer\": \"Postman Redis demo answer\",\n  \"timeCostSeconds\": 3\n}" },
+        "url": { "raw": "{{baseUrl}}/api/answer/submit", "host": ["{{baseUrl}}"], "path": ["api", "answer", "submit"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('first submit succeeds', function () { pm.expect([200,429]).to.include(pm.response.code); });"] } }]
+    },
+    {
+      "name": "09 Submit Answer Duplicate - expected 429 if run immediately",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "body": { "mode": "raw", "raw": "{\n  \"questionId\": {{questionId}},\n  \"userAnswer\": \"Postman Redis demo answer\",\n  \"timeCostSeconds\": 3\n}" },
+        "url": { "raw": "{{baseUrl}}/api/answer/submit", "host": ["{{baseUrl}}"], "path": ["api", "answer", "submit"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('duplicate submit is blocked or lock has expired', function () { pm.expect([200,429]).to.include(pm.response.code); });"] } }]
+    },
+    {
+      "name": "10 Wrong Password Attempt - run 6 times for 429",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{limitUsername}}\",\n  \"password\": \"wrong-password\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('wrong password returns 401 or limit returns 429', function () { pm.expect([401,429]).to.include(pm.response.code); });"] } }]
+    }
+  ]
+}

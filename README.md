@@ -13,6 +13,7 @@
 - [数据库设计](#数据库设计)
 - [核心接口](#核心接口)
 - [启动方式](#启动方式)
+- [演示与压测](#演示与压测)
 - [项目亮点](#项目亮点)
 - [后续计划](#后续计划)
 
@@ -42,7 +43,7 @@
 | Spring MVC | Spring Boot 管理 | REST API 与 MVC 拦截器 |
 | MyBatis | 3.0.5 | 数据访问与 XML SQL 映射 |
 | MySQL | 8.x 推荐 | 业务数据与 Refresh Token 持久化 |
-| Redis | 7.x+ | 题目详情缓存、登录失败限流与热门题目排行 |
+| Redis | 7.x+ | 登录 token 缓存、题目详情缓存、热门题缓存、练习统计缓存、登录限流与重复提交锁 |
 | JJWT | 0.12.6 | Access Token、Refresh Token 签发与解析 |
 | Spring Security Crypto | Spring Boot 管理 | BCrypt 密码加密，不使用完整 Security Filter Chain |
 | Lombok | Spring Boot 管理 | 减少实体与 DTO 样板代码 |
@@ -99,7 +100,9 @@
 - Cache Aside 缓存题目详情，动态计数仍从 MySQL 实时读取
 - 不存在的题目使用短 TTL 空值缓存，正常缓存使用随机 TTL 抖动
 - 题目或标签更新后主动删除相关缓存
-- 使用 Redis ZSet 累计题目访问热度并提供热门题目接口
+- 缓存首页热门题列表，并使用 Redis ZSet 累计题目访问热度
+- 缓存用户练习总览统计，提交答案后主动失效
+- 使用短 TTL Redis 锁防止同一用户短时间内重复提交同一道题
 - 兼容已确认语义的历史题型值
 
 登录接口按“用户名 + 客户端 IP”记录失败次数。Redis Lua 脚本原子执行 `INCR + PEXPIRE`，默认 5 分钟内失败 5 次后返回 HTTP 429；登录成功会清除计数。
@@ -725,6 +728,38 @@ export APP_JWT_SECRET='your-secret-at-least-32-bytes-long'
 
 生产 Profile 默认启用 `Secure` Refresh Token Cookie，因此必须通过 HTTPS 访问。前端使用相对 `/api` 地址，适合由 Nginx 等反向代理将同域 `/api` 请求转发到后端。
 
+## 演示与压测
+
+后端收尾阶段提供一套可直接用于面试展示的材料：
+
+| 目标 | 文件 |
+| --- | --- |
+| Knife4j / Swagger 在线接口文档 | 启动后访问 `/doc.html` 或 `/swagger-ui/index.html` |
+| Postman 完整演示集合 | `docs/demo/postman/java-ai-interview-agent.postman_collection.json` |
+| Redis 命中、过期、更新失效验证手册 | `docs/demo/redis-validation-guide.md` |
+| Redis 缓存前后耗时、命中率、限流和锁效果压测脚本 | `docs/demo/scripts/redis-demo-benchmark.ps1` |
+| 简历/面试指标报告模板 | `docs/demo/results/redis-demo-metrics-template.md` |
+
+本地后端启动后，可运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File docs/demo/scripts/redis-demo-benchmark.ps1 `
+  -BaseUrl http://localhost:8080 `
+  -RedisCli E:\Redis\redis-cli.exe `
+  -RedisPassword redis123 `
+  -Username demo_user `
+  -Password 123456 `
+  -QuestionId 1 `
+  -Loops 30
+```
+
+脚本会输出 `docs/demo/results/redis-demo-metrics.md`，重点记录：
+
+- 题目详情接口：无缓存平均耗时、缓存命中平均耗时、p95 耗时。
+- MySQL 查询次数变化：详情缓存 miss 路径约 4 次 mapper 调用，hit 路径约 2 次 mapper 调用。
+- 热门题缓存命中率：通过请求前 `EXISTS question:hot:list` 统计。
+- 登录失败限流效果：同一用户名连续错误登录，默认第 6 次返回 429。
+- 重复提交锁效果：同一用户短时间重复提交同一题，第二次返回 429。
 ## 项目亮点
 
 ### 1. 完整度较高的双令牌闭环
