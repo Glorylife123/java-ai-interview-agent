@@ -1,8 +1,8 @@
 # Java AI Interview Agent
 
-一个面向 Java 技术面试场景的前后端分离题库与刷题后台。目前已经完成用户、题目、标签、答题提交、答题记录、错题本、练习统计、权限控制以及双 JWT 会话管理，用户侧已具备基础的刷题闭环（答题 → 记录 → 错题本 → 统计），并新增**规则版模拟面试模块**（发起面试 → 逐题作答 → 即时关键词评分 → 生成面试报告），可作为后续接入 AI 模拟面试、智能评分和面试报告的业务底座。
+一个面向 Java 技术面试场景的前后端分离题库与刷题后台。目前已经完成用户、题目、标签、答题提交、答题记录、错题本、练习统计、权限控制以及双 JWT 会话管理，用户侧已具备题库浏览、答案提交与历史记录流程，并提供错题本和统计模块；普通答题判分与自动错题收集仍待接入。项目同时新增**规则版模拟面试模块**（发起面试 → 逐题作答 → 即时关键词评分 → 生成面试报告），可作为后续接入 AI 模拟面试、智能评分和面试报告的业务底座。
 
-> 当前版本暂未接入大模型。模拟面试的评分与报告生成基于规则（标准答案关键句命中率），不调用任何外部 AI 接口；普通答题判分仅做标准答案回显与占位逻辑，错题暂不自动累积，预留为接入 AI 评分后的自动收集入口。项目名称中的 AI Interview Agent 属于后续规划，不把未完成能力描述为已实现功能。
+> 当前版本暂未接入大模型。模拟面试的评分与报告生成基于规则（标准答案关键句命中率），不调用任何外部 AI 接口；普通答题当前仅保存用户答案并回显标准答案与解析，`isCorrect` / `score` 保持空值，题目提交/正确计数与错题自动累积尚未接入。项目名称中的 AI Interview Agent 属于后续规划，不把未完成能力描述为已实现功能。
 
 ## 目录
 
@@ -23,7 +23,7 @@
 
 - **普通用户**：注册登录、浏览题库、按条件筛选题目、查看题目详情、提交答题、查看答题历史、错题本复习、查看练习统计、发起模拟面试并获取逐题评分与面试报告、维护个人资料和修改密码。
 - **管理员**：查看数据概览，管理用户、题目和标签，重置用户密码、禁用用户以及吊销用户会话。
-- **系统基础能力**：答题记录、错题累计、练习统计、逻辑删除、双令牌认证和 Refresh Token 轮换。
+- **系统基础能力**：答题记录、错题本管理、练习统计接口、逻辑删除、双令牌认证和 Refresh Token 轮换。
 
 题目类型统一为以下四类：
 
@@ -87,6 +87,7 @@
 - 检测到重放后吊销用户全部有效 Refresh Token
 - 同一用户、同一设备重新登录时自动挤掉旧会话
 - 退出登录、修改密码和管理员操作均可主动吊销会话
+- 最新 Access Token 缓存到 `login:token:{userId}`，TTL 与 Access Token 有效期一致，注销或吊销时同步删除
 - 前端合并并发 401，只执行一次刷新，其余请求等待后重放
 
 ### 3. 题库管理
@@ -94,7 +95,7 @@
 - 题目新增、查询、编辑和逻辑删除
 - 按关键词、难度、题型和标签组合筛选
 - 分页查询和每页数量限制
-- 浏览次数、提交次数、正确次数统计
+- 浏览次数实时更新；提交次数和正确次数字段已预留，待普通答题判分接入后累加
 - 题目新增或编辑时整体维护标签集合
 - 批量加载题目标签，避免逐题查询产生 N+1 问题
 - Cache Aside 缓存题目详情，动态计数仍从 MySQL 实时读取
@@ -120,8 +121,7 @@
 
 - 提交答题记录（当前不接入 AI，仅保存用户答案并回显标准答案与解析）
 - 分页查询当前登录用户的历史答题记录
-- 答题后更新题目提交次数和正确次数
-- 错答时支持写入错题记录，同一用户再次答错同一题时累加错误次数
+- 普通答题暂不判分，`isCorrect` / `score` 保存为空，不更新题目提交/正确计数，也不自动写入错题本
 - 错题本分页查询（带回题目信息），未掌握题目优先展示
 - 标记错题为已掌握 / 取消掌握，以及物理移除错题
 - 随机抽取一道错题的完整详情，用于错题再练
@@ -136,6 +136,8 @@
 - 分类统计：按标签分类（`tag.category`）分组的答题数与正确率
 - 薄弱标签：默认前 5 个错误最多的标签
 - 每日趋势：默认最近 30 天的练习量（缺失日期不补 0）
+
+> 正确率、平均分、分类统计和薄弱标签依赖已评估的答题记录；当前普通答题记录尚未判分，因此新提交记录不会贡献这些指标，待 AI 判题接入后补齐。
 
 ### 7. 模拟面试（规则版，无 AI）
 
@@ -213,7 +215,7 @@ src/main/java/com/example/interviewagent
 ├─ entity       # 数据库实体
 ├─ exception    # 业务异常与全局异常处理
 ├─ mapper       # MyBatis Mapper 接口
-├─ redis        # 题目缓存/排行与登录限流
+├─ redis        # Token、题目/统计缓存、热门排行、登录限流与重复提交锁
 ├─ security     # JWT、Cookie、认证与管理员拦截器
 ├─ service      # 业务接口与实现
 ├─ interview    # 模拟面试策略包（出题/评分/报告接口与规则实现、流程编排器）
@@ -316,12 +318,12 @@ sequenceDiagram
 ```mermaid
 erDiagram
     USER ||--o{ QUESTION : creates
-    USER ||--o{ USER_ANSWER_RECORD : submits
+    USER ||--o{ ANSWER_RECORD : submits
     USER ||--o{ WRONG_QUESTION : owns
     USER ||--o{ REFRESH_TOKENS : has
     QUESTION ||--o{ QUESTION_TAG : binds
     TAG ||--o{ QUESTION_TAG : binds
-    QUESTION ||--o{ USER_ANSWER_RECORD : answered
+    QUESTION ||--o{ ANSWER_RECORD : answered
     QUESTION ||--o{ WRONG_QUESTION : recorded
     REFRESH_TOKENS ||--o{ REFRESH_TOKENS : rotates
     USER ||--o{ INTERVIEW_SESSION : owns
@@ -421,7 +423,7 @@ question 1 ── N question_tag N ── 1 tag
 
 ### 模拟面试相关表（`interview_*`）
 
-规则版模拟面试模块共 5 张表，建表脚本见 `sql/interview.sql`（全部 `IF NOT EXISTS`，可重复执行）：
+规则版模拟面试模块共 5 张表，建表脚本见 `sql/interview.sql`（全部 `IF NOT EXISTS`，可重复执行）；完整全库 DDL 见 [`sql/interview_agent.sql`](#数据库初始化脚本)：
 
 - `interview_session`：面试会话。核心字段 `user_id`、`position`、`difficulty`（简单/中等/困难）、`status`（CREATED/IN_PROGRESS/FINISHED/CANCELLED）、`total_question_count`、`current_question_index`、`started_at`、`ended_at`。
 - `interview_question_record`：面试题目记录。`question_id` 关联题库，`question_content` 为出题时的题目内容快照，`competency` 记录考察能力/题型，`sort_order` 为题目顺序，`source_type`（QUESTION_BANK/RULE/AI）。
@@ -438,7 +440,20 @@ question 1 ── N question_tag N ── 1 tag
 - 无效或过期 Refresh Token 清理脚本
 - 模拟面试题目、答案和评分唯一约束脚本
 
-> 当前仓库尚未提供完整的数据库初始化 DDL。首次部署前需要创建 `interview_agent` 数据库及上述业务表，后续计划引入 Flyway 或 Liquibase 管理完整表结构和版本迁移。
+### 数据库初始化脚本
+
+仓库已提供完整初始化 DDL：`sql/interview_agent.sql`（Navicat 导出，UTF-8）。该脚本以 `DROP TABLE IF EXISTS` + `CREATE TABLE` 的方式重建全部 12 张业务表，并包含推荐索引（如 `refresh_tokens` 的 `uk_jti` / `idx_parent_jti` / `idx_user_device`，`wrong_question` 的 `uk_user_question`，`interview_report` 的 `uk_session_id`，`question_tag` 的 `uk_question_tag` 等）。首次部署时只要先创建 `interview_agent` 库，再执行此脚本即可得到完整表结构。
+
+> 该脚本会先 `DROP` 再 `CREATE`，会清空已存在表的数据，仅用于全新初始化；已有数据的环境请改用 `docs/migrations/` 中的增量脚本，且脚本不含种子数据。
+
+`docs/migrations/` 目前包含以下增量迁移与清理脚本，用于已有数据的规范化与历史数据清理：
+
+- 题目类型规范化脚本
+- 逻辑删除题目的历史数据清理脚本
+- 无效或过期 Refresh Token 清理脚本
+- 模拟面试题目、答案和评分唯一约束脚本
+
+> 当前仓库尚未引入 Flyway 或 Liquibase，表结构以 `sql/interview_agent.sql` 为准，后续计划引入版本化迁移工具统一管理 DDL 变更。
 
 ## 核心接口
 
@@ -547,6 +562,7 @@ keyword、difficulty、questionType、tagId、pageNum、pageSize
 | GET | `/api/interview/session/{sessionId}/current-question` | 获取当前题目（不推进流程） |
 | POST | `/api/interview/session/{sessionId}/answer` | 提交回答：即时规则评分，返回得分/等级/命中缺失点/建议及下一题，或标记面试完成 |
 | GET | `/api/interview/session/{sessionId}/report` | 获取面试报告（直接查询，不重新生成） |
+| GET | `/api/interview/session/{sessionId}/answers` | 查询本场面试的逐题回答和评分明细 |
 | GET | `/api/interview/sessions` | 列出当前用户全部面试历史 |
 
 创建面试入参 `InterviewCreateDTO`：
@@ -584,10 +600,10 @@ git clone https://github.com/Glorylife123/java-ai-interview-agent.git
 cd java-ai-interview-agent
 ```
 
-如果功能仍在开发分支：
+如果需要查看本轮 Redis 与后端收尾版本：
 
 ```bash
-git switch feat/auth-frontend-progress
+git switch feat/backend-demo-redis-wrapup
 ```
 
 ### 3. 准备数据库
@@ -600,19 +616,19 @@ CREATE DATABASE interview_agent
   COLLATE utf8mb4_0900_ai_ci;
 ```
 
-当前项目尚未提供完整初始化 DDL，需要确保业务表已经按[数据库设计](#数据库设计)创建。`docs/migrations/` 中的脚本用于已有数据迁移和清理，不等同于完整初始化脚本。
+仓库已提供完整初始化 DDL `sql/interview_agent.sql`，创建库后直接执行即可生成全部业务表。`docs/migrations/` 中的脚本用于已有数据的迁移和清理，不复盖完整初始化场景。
 
-启动本地 Redis（Homebrew 安装方式）：
+dev Profile 默认使用 Redis 密码 `redis123`。启动本地 Redis（直接运行方式）：
 
 ```bash
-brew services start redis
-redis-cli ping
+redis-server --requirepass redis123
+redis-cli -a redis123 ping
 ```
 
 返回 `PONG` 表示 Redis 可用。也可以使用 Docker：
 
 ```bash
-docker run -d --name interview-redis -p 6379:6379 redis:7-alpine
+docker run -d --name interview-redis -p 6379:6379 redis:7-alpine redis-server --requirepass redis123
 ```
 
 ### 4. 配置环境变量
@@ -627,20 +643,21 @@ jdbc:mysql://localhost:3306/interview_agent
 
 | 环境变量 | 开发环境默认值 | 说明 |
 | --- | --- | --- |
-| `DB_USERNAME` | `root` | 数据库用户名 |
-| `DB_PASSWORD` | `root` | 数据库密码 |
+| `SPRING_DATASOURCE_URL` | 使用 Profile 中的本地 MySQL 地址 | 覆盖数据库连接 URL |
+| `SPRING_DATASOURCE_USERNAME` | `root` | 覆盖数据库用户名 |
+| `SPRING_DATASOURCE_PASSWORD` | 使用 Profile 中的本地配置 | 覆盖数据库密码，部署时必须显式设置 |
 | `REDIS_HOST` | `localhost` | Redis 地址 |
 | `REDIS_PORT` | `6379` | Redis 端口 |
-| `REDIS_PASSWORD` | 空 | Redis 密码 |
+| `REDIS_PASSWORD` | dev Profile 默认为 `redis123` | Redis 密码 |
 | `REDIS_DATABASE` | `0` | Redis logical database |
-| `APP_JWT_SECRET` | 仅开发环境提供回退值 | HS256 密钥，生产环境必须设置且不少于 32 字节 |
+| `APP_JWT_SECRET` | Profile 中存在本地配置值 | 覆盖 HS256 密钥，生产环境必须显式设置且不少于 32 字节 |
 | `SPRING_PROFILES_ACTIVE` | `dev` | Spring Profile，生产使用 `prod` |
 
 Git Bash / Linux / macOS 示例：
 
 ```bash
-export DB_USERNAME=root
-export DB_PASSWORD='your-database-password'
+export SPRING_DATASOURCE_USERNAME=root
+export SPRING_DATASOURCE_PASSWORD='your-database-password'
 export REDIS_HOST=localhost
 export REDIS_PORT=6379
 export APP_JWT_SECRET='replace-with-at-least-32-bytes-secret'
@@ -649,8 +666,8 @@ export APP_JWT_SECRET='replace-with-at-least-32-bytes-secret'
 Windows PowerShell 示例：
 
 ```powershell
-$env:DB_USERNAME = "root"
-$env:DB_PASSWORD = "your-database-password"
+$env:SPRING_DATASOURCE_USERNAME = "root"
+$env:SPRING_DATASOURCE_PASSWORD = "your-database-password"
 $env:REDIS_HOST = "localhost"
 $env:REDIS_PORT = "6379"
 $env:APP_JWT_SECRET = "replace-with-at-least-32-bytes-secret"
@@ -719,14 +736,14 @@ npm run build
 
 ```bash
 export SPRING_PROFILES_ACTIVE=prod
-export DB_USERNAME=your_db_user
-export DB_PASSWORD=your_db_password
+export SPRING_DATASOURCE_USERNAME=your_db_user
+export SPRING_DATASOURCE_PASSWORD=your_db_password
 export REDIS_HOST=your_redis_host
 export REDIS_PASSWORD=your_redis_password
 export APP_JWT_SECRET='your-secret-at-least-32-bytes-long'
 ```
 
-生产 Profile 默认启用 `Secure` Refresh Token Cookie，因此必须通过 HTTPS 访问。前端使用相对 `/api` 地址，适合由 Nginx 等反向代理将同域 `/api` 请求转发到后端。
+生产 Profile 默认启用 `Secure` Refresh Token Cookie，因此必须通过 HTTPS 访问。前端使用相对 `/api` 地址，适合由 Nginx 等反向代理将同域 `/api` 请求转发到后端。仓库内 Profile 仍包含本地开发回退配置，不是开箱即用的生产配置；部署前必须通过环境变量覆盖数据库密码、Redis 密码和 JWT 密钥。
 
 ## 演示与压测
 
@@ -762,6 +779,9 @@ powershell -ExecutionPolicy Bypass -File docs/demo/scripts/redis-demo-benchmark.
 - 热门题缓存命中率：通过请求前 `EXISTS question:hot:list` 统计。
 - 登录失败限流效果：同一用户名连续错误登录，默认第 6 次返回 429。
 - 重复提交锁效果：同一用户短时间重复提交同一题，第二次返回 429。
+
+> 压测报告中的 1012 道题是采集指标时的临时数据集。2026-07-20 已从本地 MySQL 物理删除 `source = REDIS_BENCH_SEED_20260719` 的 1000 道演示题及其 4 条关联压测答题记录；当前保留 12 道有效题，报告继续保留当时的历史实测数据。
+
 ## 项目亮点
 
 ### 1. 完整度较高的双令牌闭环
@@ -789,7 +809,7 @@ powershell -ExecutionPolicy Bypass -File docs/demo/scripts/redis-demo-benchmark.
 - `passwordHash` 配置为仅写字段，不会序列化到响应体
 - Refresh Token 不进入响应 JSON，只通过 HttpOnly Cookie 下发
 - 数据库仅保存 Refresh Token 的 jti 和状态，不保存完整令牌字符串
-- 生产环境配置采用环境变量并启用 Secure Cookie
+- Spring Boot 标准环境变量可覆盖数据库、Redis 和 JWT 配置；生产部署需主动注入敏感配置并启用 Secure Cookie
 
 ### 4. 题库查询与标签加载优化
 
@@ -815,7 +835,7 @@ Axios 自动添加 Access Token、刷新过期令牌、排队重放并发请求�
 
 ### 优先级一：可部署性与权限安全
 
-- [ ] 补充完整数据库初始化脚本
+- [x] 补充完整数据库初始化脚本（`sql/interview_agent.sql`）
 - [ ] 引入 Flyway 或 Liquibase 管理表结构和版本迁移
 - [x] 公开注册固定创建普通用户，管理员由受控流程创建
 - [ ] 收紧用户列表、用户详情的读取权限
@@ -847,9 +867,9 @@ Axios 自动添加 Access Token、刷新过期令牌、排队重放并发请求�
 
 ### 优先级四：工程质量
 
-- [ ] 增加 Service、Mapper、Controller 和认证轮换测试
+- [ ] 扩充 Mapper、并发刷新和跨模块集成测试（当前已有 26 个后端测试，覆盖认证、Controller、Service、拦截器、Redis 限流和模拟面试编排）
 - [ ] 为 Refresh Token 并发刷新增加数据库级并发控制
-- [x] 增加 `/api/admin/stats` 专用统计接口（用户侧统计 `/api/stat/**` 已落地）
+- [ ] 增加 `/api/admin/stats` 专用统计接口（当前管理仪表盘通过用户、题目和标签列表接口汇总）
 - [ ] 参数化数据库 URL、前端 API 地址和跨域配置
 - [x] 接入 OpenAPI / Swagger（springdoc-openapi + Knife4j）
 - [ ] 增加管理员关键操作审计日志
