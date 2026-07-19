@@ -1,5 +1,6 @@
 <template>
   <section>
+    <HotQuestions :limit="10" />
     <el-card shadow="never">
       <template #header><div class="page-header"><span>题库</span><el-button @click="resetFilters">重置筛选</el-button></div></template>
       <el-form :inline="true" :model="filters" class="filters" @submit.prevent="search">
@@ -42,6 +43,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from '../utils/axios.js'
 import Pagination from '../components/Pagination.vue'
+import HotQuestions from '../components/HotQuestions.vue'
 import { QUESTION_TYPE_OPTIONS, questionTypeLabel } from '../utils/questionType.js'
 
 const router = useRouter()
