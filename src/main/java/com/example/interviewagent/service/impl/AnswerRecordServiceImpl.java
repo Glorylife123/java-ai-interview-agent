@@ -6,6 +6,8 @@ import com.example.interviewagent.entity.AnswerRecord;
 import com.example.interviewagent.entity.Question;
 import com.example.interviewagent.exception.BusinessException;
 import com.example.interviewagent.mapper.AnswerRecordMapper;
+import com.example.interviewagent.redis.AnswerSubmitLockService;
+import com.example.interviewagent.redis.PracticeStatRedisService;
 import com.example.interviewagent.service.AnswerRecordService;
 import com.example.interviewagent.service.QuestionService;
 import com.example.interviewagent.vo.AnswerResultVO;
@@ -29,6 +31,8 @@ public class AnswerRecordServiceImpl implements AnswerRecordService {
 
     private final AnswerRecordMapper answerRecordMapper;
     private final QuestionService questionService;
+    private final PracticeStatRedisService practiceStatRedisService;
+    private final AnswerSubmitLockService answerSubmitLockService;
     // 错题本接入点：保持为「仅声明、不注入」可避免本阶段无 AI 判分时的循环依赖；
     // 第 11 步接入 AI 判分后，在此注入并调用 addOrIncrease(userId, questionId) 即可自动加入错题本。
     // private final WrongQuestionService wrongQuestionService;
@@ -43,6 +47,9 @@ public class AnswerRecordServiceImpl implements AnswerRecordService {
         }
         // 校验题目存在（不存在时 getById 抛 404）。
         Question question = questionService.getById(dto.getQuestionId());
+        if (!answerSubmitLockService.tryLock(userId, dto.getQuestionId())) {
+            throw new BusinessException(429, "提交过于频繁，请稍后再试");
+        }
 
         // 本迭代（第 5 步）不接入 AI 判断：isCorrect / score 保持 null，answerSource 固定 MANUAL。
         // 严格约束：不做正误判断、不评分、不写入 WrongQuestion 错题本。
@@ -56,6 +63,7 @@ public class AnswerRecordServiceImpl implements AnswerRecordService {
         record.setAnswerSource("MANUAL");
         record.setCreatedAt(LocalDateTime.now());
         answerRecordMapper.insert(record);
+        practiceStatRedisService.evictOverview(userId);
 
         // TODO(step11 接入 AI 评分后补齐以下逻辑)：
         // 1. 调用 AI 评分服务得到 isCorrect / score，回填到已 insert 的 record（或改为先评分再 insert）。
@@ -96,6 +104,11 @@ public class AnswerRecordServiceImpl implements AnswerRecordService {
         if (userId == null) {
             throw new BusinessException(401, "用户未登录");
         }
+        return practiceStatRedisService.findOverview(userId)
+                .orElseGet(() -> loadOverviewStat(userId));
+    }
+
+    private PracticeStatVO loadOverviewStat(Long userId) {
         PracticeStatVO vo = answerRecordMapper.selectOverviewStat(userId);
         if (vo == null) {
             // 无已评估记录时返回全 0 默认 VO（不抛异常）。
@@ -106,6 +119,7 @@ public class AnswerRecordServiceImpl implements AnswerRecordService {
             vo.setCorrectRate(BigDecimal.ZERO.setScale(1, RoundingMode.HALF_UP));
             vo.setWrongBookCount(0L);
             vo.setAvgScore(BigDecimal.ZERO.setScale(1, RoundingMode.HALF_UP));
+            practiceStatRedisService.putOverview(userId, vo);
             return vo;
         }
         // COUNT/SUM 在空集上由 MyBatis 聚合返回 NULL，统一兜底为 0。
@@ -121,6 +135,7 @@ public class AnswerRecordServiceImpl implements AnswerRecordService {
         vo.setCorrectRate(ratePercent(correct, correct + wrong));
         // avgScore 全 NULL 时数据库返回 null，兜底为 0 并保留一位小数。
         vo.setAvgScore(nullToZeroScale1(vo.getAvgScore()));
+        practiceStatRedisService.putOverview(userId, vo);
         return vo;
     }
 

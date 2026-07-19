@@ -1,4 +1,7 @@
 spring:
+  data:
+    redis:
+      password: ${REDIS_PASSWORD:redis123}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/interview_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai

@@ -4,6 +4,7 @@ import com.example.interviewagent.config.JwtProperties;
 import com.example.interviewagent.entity.RefreshToken;
 import com.example.interviewagent.entity.User;
 import com.example.interviewagent.exception.BusinessException;
+import com.example.interviewagent.redis.AuthTokenRedisService;
 import com.example.interviewagent.security.JwtTokenProvider;
 import com.example.interviewagent.security.SignedRefreshToken;
 import com.example.interviewagent.service.TokenService;
@@ -33,6 +34,7 @@ public class TokenServiceImpl implements TokenService {
     private final JwtProperties jwtProperties;
     private final RefreshTokenStore refreshTokenStore;
     private final UserService userService;
+    private final AuthTokenRedisService authTokenRedisService;
 
     @Override
     @Transactional
@@ -91,6 +93,7 @@ public class TokenServiceImpl implements TokenService {
                 log.warn("检测到已轮换 RT 被复用且超出宽限期（{}s > {}s），吊销该用户全部有效 RT。userId={}, jti={}",
                         secondsSinceRevoked, jwtProperties.getGraceSeconds(), userId, jti);
                 int revoked = refreshTokenStore.revokeAllByUserId(userId, now);
+                authTokenRedisService.evictAccessToken(userId);
                 log.warn("复用检测触发链级吊销完成。userId={}, 吊销数量={}", userId, revoked);
                 throw new BusinessException(401, "检测到 Refresh Token 复用，已登出全部会话，请重新登录");
             } else {
@@ -129,7 +132,9 @@ public class TokenServiceImpl implements TokenService {
             return;
         }
         String jti = claims.getId();
+        Long userId = Long.valueOf(claims.getSubject());
         boolean changed = refreshTokenStore.revokeByJti(jti, LocalDateTime.now());
+        authTokenRedisService.evictAccessToken(userId);
         log.info("用户注销，吊销当前设备 RT。jti={}, 是否变更={}", jti, changed);
     }
 
@@ -139,6 +144,7 @@ public class TokenServiceImpl implements TokenService {
         // 校验用户存在（不存在会抛 404）
         userService.getById(userId);
         int count = refreshTokenStore.revokeAllByUserId(userId, LocalDateTime.now());
+        authTokenRedisService.evictAccessToken(userId);
         log.info("管理员踢人，吊销用户全部有效 RT。userId={}, 数量={}", userId, count);
     }
 
@@ -160,6 +166,8 @@ public class TokenServiceImpl implements TokenService {
         refreshTokenStore.save(entity);
 
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
+        authTokenRedisService.cacheAccessToken(
+                user.getId(), accessToken, Duration.ofSeconds(jwtProperties.getAccessTokenTtlSeconds()));
         return new IssuedTokens(
                 accessToken,
                 jwtProperties.getAccessTokenTtlSeconds(),

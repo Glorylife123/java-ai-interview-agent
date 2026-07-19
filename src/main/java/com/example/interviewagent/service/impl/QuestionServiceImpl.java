@@ -34,6 +34,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class QuestionServiceImpl implements QuestionService {
 
+    private static final int HOT_CACHE_SIZE = 50;
+
     private final QuestionMapper questionMapper;
     private final TagMapper tagMapper;
     private final QuestionTagMapper questionTagMapper;
@@ -94,8 +96,13 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     public List<HotQuestionResponse> listHot(Integer limit) {
-        int safeLimit = limit == null || limit < 1 ? 10 : Math.min(limit, 50);
-        List<QuestionRankEntry> ranks = questionRedisService.topViewed(safeLimit);
+        int safeLimit = limit == null || limit < 1 ? 10 : Math.min(limit, HOT_CACHE_SIZE);
+        return questionRedisService.findHotList(safeLimit)
+                .orElseGet(() -> loadHotListFromRank(safeLimit));
+    }
+
+    private List<HotQuestionResponse> loadHotListFromRank(int safeLimit) {
+        List<QuestionRankEntry> ranks = questionRedisService.topViewed(HOT_CACHE_SIZE);
         if (ranks.isEmpty()) {
             return List.of();
         }
@@ -117,7 +124,8 @@ public class QuestionServiceImpl implements QuestionService {
                 }
             }
         }
-        return result;
+        questionRedisService.putHotList(result);
+        return result.subList(0, Math.min(safeLimit, result.size()));
     }
 
     @Override
@@ -175,6 +183,7 @@ public class QuestionServiceImpl implements QuestionService {
         }
         QuestionResponse response = toResponse(getById(id));
         questionRedisService.evictDetail(id);
+        questionRedisService.evictHotList();
         return response;
     }
 
